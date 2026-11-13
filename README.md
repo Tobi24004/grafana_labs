@@ -48,6 +48,25 @@ Mỗi tầng theo dõi 5 chỉ số: **mức dùng uplink (%)**, **băng thông 
 
 Luồng giám sát: `thiết bị mạng → collector gNMI/SNMP → Kafka telemetry bus → InfluxDB → Grafana`.
 
+### Quy ước đặt tên
+
+| Thành phần | Dạng | Ví dụ |
+|---|---|---|
+| Site | mã IATA + số thứ tự | `HAN1`, `HAN2` (Hà Nội), `SGN1` (TP.HCM), `DAD1` (Đà Nẵng) |
+| Tên thiết bị | `<site>-<vai trò>-<số>` | `han1-core-04`, `sgn1-acc-22` |
+| FQDN | `<tên>.net.example.com` | `han1-core-04.net.example.com` |
+| IP quản trị | `10.<site×10>.<tầng>.<số>` | `10.10.1.14` (HAN1, tầng CORE) |
+| Vị trí | `<site> · R<rack>-U<unit>` hoặc `<site> · IDF-<số>` | `HAN1 · R06-U09`, `HAN2 · IDF-03` |
+| Liên hệ | theo vai trò, không theo người | `noc-shift-a@example.com`, `wan-eng@example.com` |
+
+Tên miền dùng trong bản mô phỏng là `example.com` — tên miền **dành riêng cho tài liệu theo RFC 2606**,
+nên không bao giờ đụng vào hệ thống thật của ai. Đổi sang tên miền của bạn chỉ bằng hai lệnh:
+
+```bash
+sed -i 's/net\.example\.com/net.congty.vn/g'  index.html
+sed -i 's/@example\.com/@congty.vn/g'         index.html
+```
+
 ---
 
 ## 5 dashboard

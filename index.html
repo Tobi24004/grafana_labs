@@ -371,18 +371,22 @@ const TYPES=[
  {id:'WAP',nm:'Wi-Fi AP',hn:'ap',metric:'util',unit:'%',d:1}
 ];
 const ROLEMAP={CORE:['SWC','RTR'],DIST:['SWD','FWL'],ACC:['SWA','WAP'],WAN:['RTR','FWL']};
-const SITES=['HN-DC1','HN-DC2','HCM-DC1','Campus-A'];
+const DOMAIN='net.example.com';          // zone hạ tầng mạng (example.com là tên miền dành riêng cho tài liệu, RFC 2606)
+const SITES=['HAN1','HAN2','SGN1','DAD1'];  // mã site theo IATA + số thứ tự
 const PROTOS=['100G QSFP28','40G QSFP+','10G SFP+','1G RJ45'];
 const FWV=['9.3(8)','10.2(5)','10.4(3)'];
 const STLBL={ok:'Up',warn:'Warning',crit:'Critical',off:'Unreachable'};
 const DEV=[];
 for(let i=1;i<=50;i++){
   const z=ZONES[i%4], ty=TYPES.find(t=>t.id===ROLEMAP[z.id][Math.floor(i/4)%2]);
+  const si=Math.floor(rnd()*4), site=SITES[si], li=ZONES.indexOf(z), nn=String(i).padStart(2,'0');
   const st=i===7?'crit':(i===4||i===19||i===33)?'warn':(i===11||i===41)?'off':'ok';
-  DEV.push({id:ty.hn+'-'+String(i).padStart(2,'0'),zone:z.id,z,ty,proto:PROTOS[i%4],
+  const id=site.toLowerCase()+'-'+ty.hn+'-'+nn;
+  DEV.push({id,fqdn:id+'.'+DOMAIN,zone:z.id,z,ty,site,proto:PROTOS[i%4],
     fwv:FWV[i%7===0?0:i%3===0?1:2],tcam:Math.max(4,Math.min(96,Math.round(8+rnd()*86))),
-    rtt:+(0.3+rnd()*13).toFixed(2),ip:'10.'+(1+i%4)+'.'+(10+i)+'.1',
-    loc:SITES[i%4]+' · IDF-'+String(1+(i%9)).padStart(2,'0'),
+    rtt:+(0.3+rnd()*13).toFixed(2),ip:'10.'+((si+1)*10)+'.'+(li+1)+'.'+(10+i),
+    loc:site+' · '+(z.id==='ACC'?'IDF-'+String(1+(i%9)).padStart(2,'0')
+      :'R'+String(1+(i%12)).padStart(2,'0')+'-U'+String(4+(i%16)).padStart(2,'0')),
     bias:(rnd()-.5)*(ty.metric==='net'?70:ty.metric==='util'?9:ty.metric==='bw'?5:ty.metric==='temp'?2.4:.6),
     st,seen:st==='off'?Math.round(600+rnd()*900):Math.round(rnd()*9),hist:[],states:[]});
 }
@@ -451,12 +455,12 @@ const sevCol={crit:'--crit',serious:'--serious',warn:'--warn',ok:'--ok'};
 let ALERTS=new Map(), ANN=[], LOGS=[], logFilter='ALL';
 const INCIDENTS=[];
 {const now=Date.now();
- [['INC-1042','DeviceTempHigh','crit',1.6,38,'Quạt chassis rtr-04 hỏng, nhiệt lên 74 °C','datacenter'],
-  ['INC-1041','InterfaceDown','serious',2.4,96,'Đứt cáp quang tuyến HN-DC1 ↔ HN-DC2','noc'],
+ [['INC-1042','DeviceTempHigh','crit',1.6,38,'Quạt chassis han1-rtr-04 hỏng, nhiệt lên 74 °C','datacenter'],
+  ['INC-1041','InterfaceDown','serious',2.4,96,'Đứt cáp quang tuyến HAN1 ↔ HAN2','noc'],
   ['INC-1039','BGPSessionLost','crit',4.1,54,'ISP B reset phiên khi bảo trì, hold-time hết hạn','wan'],
-  ['INC-1035','HighErrorRate','serious',6.7,22,'SFP+ lỗi ở acc-22 Gi1/0/24, CRC tăng vọt','noc'],
+  ['INC-1035','HighErrorRate','serious',6.7,22,'SFP+ lỗi ở sgn1-acc-22 Gi1/0/24, CRC tăng vọt','noc'],
   ['INC-1031','LinkSaturation','warn',9.2,131,'Uplink WAN chạm 94% giờ cao điểm','capacity'],
-  ['INC-1028','OutputQueueDrops','serious',12.8,41,'Broadcast storm ở IDF-03 gây drop hàng đợi','noc']]
+  ['INC-1028','OutputQueueDrops','serious',12.8,41,'Broadcast storm ở HAN2 · IDF-03 gây drop hàng đợi','noc']]
  .forEach(([id,rule,sev,days,mtr,cause,team])=>INCIDENTS.push({id,rule,sev,
    start:now-days*864e5,mttr:mtr,cause,team,state:'resolved'}));}
 function fire(key,now){
@@ -509,16 +513,16 @@ const sloBudget=s=>{const allow=100-s.target,used=Math.max(0,100-s.sli());
   return{allow,used,left:Math.max(0,1-used/allow),burn:used/allow};};
 const MAINT=[
  ['CW46 · 14/11 22:00–02:00','Nâng NX-OS 10.4(3) cho 6 switch tầng DIST','đã lên lịch','noc'],
- ['CW46 · 16/11 06:00–07:30','Thay 8 SFP+ lỗi CRC tại HN-DC1 · IDF-03','đã lên lịch','noc'],
+ ['CW46 · 16/11 06:00–07:30','Thay 8 SFP+ lỗi CRC tại HAN1 · IDF-03','đã lên lịch','noc'],
  ['CW47 · 19/11 23:00–01:00','Chuyển peering ISP B sang cổng 100G, reload router biên','chờ duyệt','wan'],
- ['CW47 · 21/11 08:00–12:00','Bảo trì UPS và PDU hàng rack core HN-DC1','chờ duyệt','datacenter']
+ ['CW47 · 21/11 08:00–12:00','Bảo trì UPS và PDU hàng rack core tại HAN1','chờ duyệt','datacenter']
 ];
 const ONCALL=[
- ['NOC ca A (hiện tại)','noc','noc-a@net-ops.vn','+84 24 1800 xxx1','đang trực'],
- ['NOC ca B','noc','noc-b@net-ops.vn','+84 24 1800 xxx2','18:00 nhận ca'],
- ['Kỹ sư WAN / peering','wan','wan@net-ops.vn','+84 24 1800 xxx3','theo lịch'],
- ['Quy hoạch dung lượng','capacity','capacity@net-ops.vn','+84 24 1800 xxx4','theo lịch'],
- ['Kỹ thuật DC (nguồn/mát)','datacenter','dc@net-ops.vn','+84 24 1800 xxx5','theo lịch']
+ ['NOC ca A (hiện tại)','noc','noc-shift-a@example.com','+84 24 1800 xxx1','đang trực'],
+ ['NOC ca B','noc','noc-shift-b@example.com','+84 24 1800 xxx2','18:00 nhận ca'],
+ ['Kỹ sư WAN / peering','wan','wan-eng@example.com','+84 24 1800 xxx3','theo lịch'],
+ ['Quy hoạch dung lượng','capacity','capacity-eng@example.com','+84 24 1800 xxx4','theo lịch'],
+ ['Kỹ thuật DC (nguồn/mát)','datacenter','dc-ops@example.com','+84 24 1800 xxx5','theo lịch']
 ];
 
 /* ===================== 6. HELPER VẼ ===================== */
@@ -865,7 +869,7 @@ function mkDonut(body,cfg){
 }
 function mkDevTable(body){
   const bar=document.createElement('div');bar.className='logbar';
-  bar.innerHTML='<input class="srch" id="devSrch" placeholder="Tìm tên thiết bị…" aria-label="Tìm thiết bị">'+
+  bar.innerHTML='<input class="srch" id="devSrch" placeholder="Tìm tên / IP / vị trí…" aria-label="Tìm thiết bị">'+
     '<button class="chip on" data-st="all">Tất cả</button>'+['ok','warn','crit','off'].map(s=>
       '<button class="chip" data-st="'+s+'">'+STLBL[s]+'</button>').join('');
   const sc=document.createElement('div');sc.className='scroll';sc.style.maxHeight='320px';
@@ -881,14 +885,14 @@ function mkDevTable(body){
   tb.querySelector('thead').addEventListener('click',e=>{const th=e.target.closest('th');if(!th||th.dataset.k==='sp')return;
     if(sort===th.dataset.k)dir=-dir;else{sort=th.dataset.k;dir=1;}renderVisible();});
   function rows(){
-    const L=DEV.filter(d=>ZSEL.has(d.zone)&&TSEL.has(d.ty.id)&&(stFilter==='all'||d.st===stFilter)&&(!q||d.id.includes(q)));
+    const L=DEV.filter(d=>ZSEL.has(d.zone)&&TSEL.has(d.ty.id)&&(stFilter==='all'||d.st===stFilter)&&(!q||d.id.includes(q)||d.ip.includes(q)||d.loc.toLowerCase().includes(q)));
     const key=d=>sort==='val'?devVal(d):sort==='ty'?d.ty.nm:sort==='st'?SEVW[d.st==='off'?'serious':d.st]:d[sort];
     return L.sort((a,b)=>{const x=key(a),y=key(b);return (x>y?1:x<y?-1:0)*dir;});}
   return {render(){
       tb.querySelectorAll('th').forEach(th=>th.querySelector('.ar').textContent=th.dataset.k===sort?(dir>0?'▲':'▼'):'');
       const L=rows();
       if(!L.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty">Không có thiết bị khớp bộ lọc</div></td></tr>';return;}
-      tbody.innerHTML=L.map(d=>'<tr><td style="font-family:var(--mono)" title="'+d.ip+'">'+d.id+'</td><td>'+d.zone+'</td>'+
+      tbody.innerHTML=L.map(d=>'<tr><td style="font-family:var(--mono)" title="'+d.fqdn+' · '+d.ip+'">'+d.id+'</td><td>'+d.zone+'</td>'+
         '<td style="color:var(--ink2)">'+d.ty.nm+'</td><td style="color:var(--ink3)">'+d.loc+'</td>'+
         '<td style="color:var(--ink2)">'+d.proto+'</td>'+
         '<td style="font-family:var(--mono);color:'+(d.fwv==='10.4(3)'?'':col('--warn'))+'">'+d.fwv+'</td>'+
@@ -904,8 +908,8 @@ function mkDevTable(body){
         const h=d.hist.slice(-20),lo=Math.min(...h),hi=Math.max(...h),rg=(hi-lo)||1;
         c.beginPath();h.forEach((v,i)=>{const x=64*i/(h.length-1),y=16-13*(v-lo)/rg;i?c.lineTo(x,y):c.moveTo(x,y);});
         c.strokeStyle=col(d.st==='off'?'--off':d.st==='crit'?'--crit':d.st==='warn'?'--warn':d.z.tok);c.lineWidth=1.3;c.stroke();});},
-    data(){return{cols:['Thiết bị','IP quản trị','Tầng','Loại','Vị trí','Firmware','RTT','Giá trị','TCAM trống','Trạng thái'],
-      rows:rows().map(d=>[d.id,d.ip,d.zone,d.ty.nm,d.loc,d.fwv,fx(d.rtt,2)+' ms',fx(devVal(d),d.ty.d)+' '+d.ty.unit,d.tcam+'%',STLBL[d.st]])};}};
+    data(){return{cols:['Thiết bị','FQDN','IP quản trị','Tầng','Loại','Vị trí','Firmware','RTT','Giá trị','TCAM trống','Trạng thái'],
+      rows:rows().map(d=>[d.id,d.fqdn,d.ip,d.zone,d.ty.nm,d.loc,d.fwv,fx(d.rtt,2)+' ms',fx(devVal(d),d.ty.d)+' '+d.ty.unit,d.tcam+'%',STLBL[d.st]])};}};
 }
 function mkLogs(body,cfg){
   const bar=document.createElement('div');bar.className='logbar';
@@ -1300,7 +1304,7 @@ function setTab(id){activeTab=id;closeExpand();
   renderVisible();}
 function buildVars(){
   const v=document.getElementById('vars');
-  v.innerHTML='<div class="var"><span class="k">Hạ tầng</span><div class="box">net-prod · 4 site</div></div>'+
+  v.innerHTML='<div class="var"><span class="k">Hạ tầng</span><div class="box">net.example.com · 4 site</div></div>'+
     '<div class="var"><span class="k">$layer</span><div class="box" id="zchips">'+
       ZONES.map(z=>'<button class="chip on" data-z="'+z.id+'">'+z.id+'</button>').join('')+'</div></div>'+
     '<div class="var"><span class="k">$device</span><details class="dd"><summary class="box">'+
@@ -1308,7 +1312,7 @@ function buildVars(){
       '<div class="lbl">Chọn loại thiết bị</div>'+TYPES.map(t=>'<button class="sel" data-t="'+t.id+'">✓ '+t.nm+'</button>').join('')+
       '<div class="sep"></div><button data-t="__all">Chọn tất cả</button></div></details></div>'+
     '<div class="var"><span class="k">$interval</span><div class="box">5s</div></div>'+
-    '<div class="var"><span class="k">NMS</span><div class="box">nms-hn-01</div></div>'+
+    '<div class="var"><span class="k">NMS</span><div class="box">nms-01.net.example.com</div></div>'+
     '<div class="var"><span class="k">Timezone</span><div class="box">Asia/Ho_Chi_Minh</div></div>';
   document.getElementById('zchips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;
     const z=b.dataset.z;ZSEL.has(z)?ZSEL.delete(z):ZSEL.add(z);b.classList.toggle('on',ZSEL.has(z));renderVisible();});
