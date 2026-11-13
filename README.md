@@ -1,10 +1,10 @@
-# grafana_labs — Mô phỏng Grafana cho hệ thống server IoT
+# grafana_labs — Mô phỏng Grafana cho hạ tầng mạng (NOC)
 
 Một trang HTML **duy nhất, không phụ thuộc build tool**, dựng lại giao diện và cách vận hành của Grafana
-cho một nền tảng IoT chạy trên cụm máy chủ: 5 dashboard, 43 panel, 50 host, 9 alert rule, 4 SLO.
+cho một trung tâm điều hành mạng: 5 dashboard, 44 panel, 50 thiết bị, 9 alert rule, 4 SLO.
 
 > ⚠️ **Toàn bộ số liệu là mô phỏng sinh trong trình duyệt** (seeded random walk + mô hình Ornstein–Uhlenbeck).
-> Trang **không** kết nối tới InfluxDB, EMQX, Prometheus hay bất kỳ máy chủ thật nào.
+> Trang **không** kết nối tới InfluxDB, Kafka, Prometheus hay bất kỳ thiết bị mạng thật nào.
 > Các câu query hiển thị trong Inspect là query mẫu đúng cú pháp Flux/PromQL/LogQL, dùng để đọc và học,
 > không phải query đang chạy. Dùng cho demo, đào tạo, thiết kế dashboard và thử nghiệm giao diện NOC.
 
@@ -23,24 +23,30 @@ Hoặc mở thẳng `index.html` bằng trình duyệt (`file://` cũng chạy),
 vì toàn bộ ứng dụng nằm trong một file tĩnh.
 
 Yêu cầu: một trình duyệt hiện đại. Không cần Node, không cần cài gói.
+**Không cần mạng** — chỉ có dòng `<link>` nạp font Google; mất mạng thì trang tự dùng font hệ thống,
+mọi thứ khác chạy nguyên vẹn vì không có một lời gọi `fetch`/`WebSocket` nào.
 
 ---
 
 ## Hệ thống được mô phỏng
 
-Bốn cụm máy chủ, mỗi cụm là một rack:
+Bốn tầng mạng, mỗi tầng là một nhóm thiết bị:
 
-| Cụm | Vai trò | Chỉ số theo dõi |
-|-----|---------|-----------------|
-| **C1** | Ingest workers | nhiệt CPU, RAM, req/s, I/O wait, công suất PDU |
-| **C2** | Broker EMQX | như trên + số kết nối MQTT, độ sâu hàng đợi |
-| **C3** | TSDB storage (InfluxDB) | như trên + độ trễ ghi p50/p95/p99, dung lượng đĩa |
-| **C4** | Edge & API | như trên + băng thông edge gateway |
+| Tầng | Vai trò | Đặc điểm số liệu |
+|------|---------|------------------|
+| **CORE** | Lõi trung tâm | băng thông lớn nhất (~78 Gbps), nhiệt độ chassis cao |
+| **DIST** | Phân phối | trung chuyển giữa core và access, có firewall nội bộ |
+| **ACC** | Truy nhập (PoE) | nhiều lỗi CRC nhất, chiếm phần lớn điện năng do PoE |
+| **WAN** | Biên & Internet | uplink bão hoà nhất (~74%), nơi phát sinh BGP và packet loss |
 
-50 host với vai trò: `API gateway`, `MQTT broker`, `Ingest worker`, `TSDB node`, `Edge gateway`, `Rack PDU` —
-mỗi host có rack‑U, IP, uplink (25/10/1 GbE hoặc WireGuard), phiên bản agent, RTT nội bộ, đĩa trống và trạng thái.
+Mỗi tầng theo dõi 5 chỉ số: **mức dùng uplink (%)**, **băng thông (Gbps)**, **lỗi CRC (/s)**,
+**nhiệt độ thiết bị (°C)**, **công suất (kW)**.
 
-Luồng dữ liệu: `client IoT → LB/TLS (HAProxy) → EMQX cluster → ingest worker → InfluxDB → Grafana`.
+50 thiết bị thuộc 6 loại — `Core switch`, `Distribution switch`, `Access switch`, `Router biên`,
+`Firewall`, `Wi-Fi AP` — mỗi thiết bị có IP quản trị, vị trí (site + IDF), tốc độ uplink
+(100G QSFP28 / 40G QSFP+ / 10G SFP+ / 1G RJ45), firmware, RTT quản trị, TCAM còn trống và trạng thái.
+
+Luồng giám sát: `thiết bị mạng → collector gNMI/SNMP → Kafka telemetry bus → InfluxDB → Grafana`.
 
 ---
 
@@ -48,30 +54,39 @@ Luồng dữ liệu: `client IoT → LB/TLS (HAProxy) → EMQX cluster → inges
 
 | Tab | Nội dung |
 |-----|----------|
-| **Tổng quan** | 6 stat + sparkline, nhiệt CPU theo cụm (có ngưỡng + annotation alert), 4 gauge tài nguyên, heatmap tải theo giờ × cụm, state timeline, sơ đồ rack 50 host, panel cảnh báo, log tail |
-| **Máy chủ** | Bảng 50 host (12 cột, sắp xếp / lọc / tìm / sparkline từng dòng), đĩa trống thấp nhất, phân bố RTT, cơ cấu theo vai trò, tiến độ rollout agent, state timeline 20 host |
-| **Điện năng DC** | Công suất stacked theo cụm, kWh và chi phí 24h, cột kWh theo giờ, tỉ trọng theo cụm, gauge PF / **PUE** / tải‑định mức, bảng phụ tải, đồ thị hệ số công suất |
-| **Hạ tầng dữ liệu** | MQTT theo topic, độ trễ ghi p50/p95/p99 với SLO 100 ms, heatmap phân bố độ trễ, kết nối broker, hàng đợi, sơ đồ kiến trúc có số liệu sống, log pipeline, bảng retention |
-| **Vận hành & SLO** | 4 SLO kèm ngân sách lỗi và burn rate, MTTR, bảng 9 alert rule, lịch sử incident, kíp trực, cửa sổ bảo trì, tài nguyên node ingest |
+| **Tổng quan** | 6 stat + sparkline, mức dùng uplink theo tầng (ngưỡng 85% + annotation alert), 4 gauge chất lượng, RTT p50/p95/p99, heatmap băng thông theo giờ × tầng, state timeline, sơ đồ topology 50 thiết bị, panel cảnh báo, syslog tail |
+| **Thiết bị mạng** | Bảng 50 thiết bị (12 cột, sắp xếp / lọc / tìm / sparkline từng dòng), TCAM còn trống thấp nhất, phân bố RTT quản trị, cơ cấu theo loại, tiến độ nâng firmware, state timeline 20 thiết bị |
+| **Điện & PoE** | Công suất stacked theo tầng, kWh và chi phí 24h, cột kWh theo giờ, tỉ trọng theo tầng, gauge PF / **PUE** / tải‑định mức, bảng phụ tải, đồ thị hệ số công suất |
+| **Hạ tầng telemetry** | Bản tin theo nguồn (gNMI / SNMP / NetFlow / syslog), độ trễ ghi InfluxDB p50/p95/p99, heatmap phân bố độ trễ, phiên BGP, output queue drops, sơ đồ kiến trúc thu thập có số liệu sống, log pipeline, bảng retention |
+| **Vận hành & SLO** | 4 SLO kèm ngân sách lỗi và burn rate, MTTR, bảng 9 alert rule, lịch sử incident, kíp trực, cửa sổ bảo trì, tài nguyên node collector |
 
 ---
 
 ## Những thứ làm đúng như Grafana thật
 
 - **Query inspector** trên mọi panel (⋮ → Inspect): tab *Data* (bảng + copy CSV), tab *Query* hiện data source,
-  query nguyên bản còn biến `${cluster:json}` và query **đã nội suy** biến dashboard, tab *Panel JSON*.
+  query nguyên bản còn biến `${layer:json}` và query **đã nội suy** biến dashboard, tab *Panel JSON*.
 - **JSON model** của cả dashboard (nút `{ }`): `uid`, `schemaVersion: 39`, `templating`, `annotations`,
   danh sách panel với `gridPos` và `targets`.
 - **Unified alerting**: 9 rule có `expr`, `for`, label định tuyến và runbook; phân biệt `pending`
   (đã chạm ngưỡng, chưa đủ `for`) với `firing`. Alert mở quá 60 giây rồi tự đóng sẽ được ghi thành
   **incident mới** kèm MTTR.
 
-  `NodeTempHigh` · `MemoryPressure` · `RequestRateHigh` · `DiskIOWaitHigh` · `IngestLatencyHigh`
-  · `IngestDropRatio` · `BrokerQueueDepth` · `DiskSpaceLow` · `NodeDown`
+  | Rule | Mức | Điều kiện |
+  |------|-----|-----------|
+  | `InterfaceDown` | major | `ifOperStatus == 2 unless ifAdminStatus == 2` |
+  | `BGPSessionLost` | critical | số phiên established < 45 |
+  | `LinkSaturation` | major | uplink WAN > 85% trong 5 phút |
+  | `HighErrorRate` | warning | CRC/FCS > 5 lỗi/s |
+  | `PacketLoss` | warning | loss thăm dò > 2.5% |
+  | `BackboneLatencyHigh` | warning | RTT p95 > 100 ms |
+  | `OutputQueueDrops` | major | `ifOutDiscards` > 600 pkt/s |
+  | `TCAMExhaustion` | warning | TCAM còn trống < 15% |
+  | `DeviceTempHigh` | critical | nhiệt thiết bị WAN > 68 °C |
 
-- **SLO tính từ dữ liệu**, không phải số cứng: SLI lấy từ chính chuỗi mẫu (tỉ lệ mẫu p95 < 100 ms,
-  tỉ lệ thời gian broker ≥ 45 kết nối…), ngân sách lỗi = `(100 − SLI) / (100 − target)`, kèm burn rate.
-- **Template variable** `$cluster`, `$role`, `$interval` lọc xuyên mọi panel và được nội suy vào query.
+- **SLO tính từ dữ liệu**, không phải số cứng: SLI lấy từ chính chuỗi mẫu (tỉ lệ mẫu RTT p95 < 100 ms,
+  tỉ lệ thời gian có ≥ 45 phiên BGP…), ngân sách lỗi = `(100 − SLI) / (100 − target)`, kèm burn rate.
+- **Template variable** `$layer`, `$device`, `$interval` lọc xuyên mọi panel và được nội suy vào query.
 - Shared crosshair giữa các time series, legend bấm được để ẩn/hiện series, row gập được,
   panel mở toàn màn hình, time range + refresh picker, kiosk mode.
 
@@ -92,10 +107,12 @@ Luồng dữ liệu: `client IoT → LB/TLS (HAProxy) → EMQX cluster → inges
 ## Ghi chú kỹ thuật
 
 - **Một file, không dependency.** Chỉ nạp font từ Google Fonts; mọi thứ còn lại nội tuyến.
-  Biểu đồ vẽ bằng Canvas 2D theo `devicePixelRatio`, sơ đồ rack và kiến trúc bằng SVG nội tuyến.
+  Biểu đồ vẽ bằng Canvas 2D theo `devicePixelRatio`, sơ đồ topology và kiến trúc bằng SVG nội tuyến.
 - **Mô hình dữ liệu**: PRNG có seed (LCG) ⇒ mỗi lần tải cho cùng một chuỗi; mỗi chỉ số là một
   `Sensor` kiểu Ornstein–Uhlenbeck có mùa vụ hình sin và xác suất spike. Chu kỳ mẫu 5 giây,
   giữ 1.441 mẫu (2 giờ) và được **mồi sẵn ngay khi tải** nên biểu đồ đầy dữ liệu từ giây đầu.
+- **Syslog mô phỏng** đúng định dạng thiết bị thật: `%LINK-3-UPDOWN`, `%BGP-5-ADJCHANGE`,
+  `%SW_MATM-4-MACFLAP_NOTIF`, xen với log poll SNMP và subscribe gNMI.
 - **Màu**: bảng màu classic của Grafana cho cả hai theme, kiểm tra tương phản theo ΔE trong OKLab
   cho người mù màu. Những cặp màu sát nhau được bù bằng **mã hoá thứ cấp**: mỗi series có kiểu nét
   đứt riêng, lặp lại trong ô màu của legend — đọc được cả khi mù màu hoặc in đen trắng.

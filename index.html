@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Vận hành hệ thống server IoT</title>
+<title>Vận hành hệ thống mạng</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: nav + tab bar + variable bar, rồi các row gập được của lưới panel 24 cột */
@@ -251,8 +251,8 @@ footer b{color:var(--ink2);font-weight:500}
 <nav class="nav">
   <div class="nav-in">
     <div class="logo" aria-hidden="true"></div>
-    <div class="crumb"><span>Dashboards</span><span>/</span><span>Hạ tầng server IoT</span><span>/</span><b>IoT Platform Operations</b></div>
-    <div class="tagrow"><span class="tag">iot-platform</span><span class="tag">server</span><span class="tag">mqtt</span><span class="tag">influxdb</span><span class="tag">prod</span></div>
+    <div class="crumb"><span>Dashboards</span><span>/</span><span>Hạ tầng mạng</span><span>/</span><b>Network Operations Center</b></div>
+    <div class="tagrow"><span class="tag">network</span><span class="tag">noc</span><span class="tag">gnmi</span><span class="tag">snmp</span><span class="tag">prod</span></div>
     <div class="spacer"></div>
     <details class="dd" id="ddRange"><summary class="ctl">🕘 <span id="rangeLbl">Last 1 hour</span> ▾</summary><div class="menu" id="menuRange"></div></details>
     <button class="ctl ico" id="btnZoom" title="Zoom out khoảng thời gian (phím z)">🔍−</button>
@@ -280,8 +280,8 @@ const RANGES=[{lbl:'Last 5 minutes',n:61},{lbl:'Last 15 minutes',n:181},{lbl:'La
 const REFS=[{lbl:'1s',ms:1000},{lbl:'2s',ms:2000},{lbl:'5s',ms:5000},{lbl:'10s',ms:10000},{lbl:'Off',ms:0}];
 let rangeIx=2, refIx=1;
 const WIN=()=>Math.min(RANGES[rangeIx].n,N);
-const DS={tsdb:'influxdb-prod (Flux)',logs:'loki-prod (LogQL)',prom:'prometheus-infra (PromQL)'};
-const UID='iot-srv-prod01', VER=63;
+const DS={tsdb:'influxdb-net (Flux)',logs:'loki-syslog (LogQL)',prom:'prometheus-noc (PromQL)'};
+const UID='net-noc-prod01', VER=12;
 const hh=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 const hhs=t=>hh(t)+':'+String(new Date(t).getSeconds()).padStart(2,'0');
 const dmy=t=>{const d=new Date(t);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+hh(t);};
@@ -306,69 +306,84 @@ class Sensor{
   frac(n,f){const a=this.d.slice(-n);return a.filter(f).length/a.length;}
 }
 const ZONES=[
- {id:'C1',nm:'C1 · Ingest workers',tok:'--s1',dash:[],
-  temp:{base:58,amp:2.6,noise:.42,min:30,max:92,spikeP:.0030,spikeMag:4.0},
-  mem:{base:63,amp:4,noise:.7,min:14,max:99},req:{base:720,amp:80,noise:16,min:120,max:1700,spikeP:.003,spikeMag:150},
-  iow:{base:3.1,amp:.5,noise:.17,min:0,max:9,spikeP:.003,spikeMag:1.9},kw:{base:154,amp:21,noise:3.4,min:40,max:260,period:2400}},
- {id:'C2',nm:'C2 · Broker EMQX',tok:'--s2',dash:[7,4],
-  temp:{base:53.5,amp:1.4,noise:.24,min:28,max:88,phase:1.2},
-  mem:{base:57,amp:5,noise:.8,min:20,max:99},req:{base:640,amp:70,noise:14,min:100,max:1600,spikeP:.0035,spikeMag:140},
-  iow:{base:2.1,amp:.4,noise:.13,min:0,max:8,spikeP:.0025,spikeMag:1.5},kw:{base:121,amp:26,noise:4.1,min:30,max:240,period:1800,phase:1}},
- {id:'C3',nm:'C3 · TSDB storage',tok:'--s3',dash:[2,4],
-  temp:{base:71,amp:2.6,noise:.5,min:34,max:96,phase:2.6,spikeP:.0035,spikeMag:5.2},
-  mem:{base:84,amp:3.4,noise:.9,min:30,max:99,spikeP:.003,spikeMag:7},req:{base:510,amp:40,noise:10,min:80,max:1300},
-  iow:{base:4.2,amp:.6,noise:.2,min:0,max:9,spikeP:.003,spikeMag:1.9},kw:{base:88,amp:14,noise:2.6,min:20,max:180,period:1500,phase:2}},
- {id:'C4',nm:'C4 · Edge & API',tok:'--s4',dash:[9,4,2,4],
-  temp:{base:47,amp:1.1,noise:.2,min:24,max:84,phase:4},
-  mem:{base:49,amp:4,noise:.6,min:16,max:97},req:{base:580,amp:55,noise:12,min:90,max:1400},
-  iow:{base:1.6,amp:.3,noise:.1,min:0,max:6},kw:{base:63,amp:9,noise:1.9,min:15,max:140,period:2100,phase:3}}
+ {id:'CORE',nm:'CORE · Lõi trung tâm',tok:'--s1',dash:[],
+  util:{base:62,amp:7,noise:1.2,min:4,max:99,spikeP:.003,spikeMag:12},
+  bw:{base:78,amp:9,noise:1.8,min:3,max:200,spikeP:.003,spikeMag:16},
+  err:{base:.4,amp:.2,noise:.12,min:0,max:40,spikeP:.0035,spikeMag:4.5},
+  temp:{base:52,amp:1.8,noise:.35,min:22,max:86,spikeP:.003,spikeMag:3.4},
+  kw:{base:12.4,amp:1.1,noise:.22,min:2,max:30,period:2400}},
+ {id:'DIST',nm:'DIST · Phân phối',tok:'--s2',dash:[7,4],
+  util:{base:55,amp:8,noise:1.3,min:3,max:99,phase:1.2},
+  bw:{base:46,amp:7,noise:1.5,min:2,max:160,phase:1},
+  err:{base:.7,amp:.3,noise:.18,min:0,max:40,spikeP:.004,spikeMag:5.5},
+  temp:{base:47,amp:1.5,noise:.3,min:20,max:82,phase:1.2},
+  kw:{base:9.2,amp:.9,noise:.2,min:1,max:24,period:1800,phase:1}},
+ {id:'ACC',nm:'ACC · Truy nhập (PoE)',tok:'--s3',dash:[2,4],
+  util:{base:38,amp:11,noise:1.6,min:2,max:99,phase:2.6},
+  bw:{base:22,amp:6,noise:1.2,min:1,max:120,phase:2.2},
+  err:{base:1.1,amp:.4,noise:.22,min:0,max:40,spikeP:.0045,spikeMag:6.5},
+  temp:{base:41,amp:1.4,noise:.28,min:18,max:78,phase:2.6},
+  kw:{base:24.6,amp:3.2,noise:.5,min:4,max:52,period:1500,phase:2}},
+ {id:'WAN',nm:'WAN · Biên & Internet',tok:'--s4',dash:[9,4,2,4],
+  util:{base:74,amp:9,noise:1.8,min:5,max:99,phase:4,spikeP:.0035,spikeMag:14},
+  bw:{base:9.4,amp:2.2,noise:.5,min:.3,max:40,phase:4},
+  err:{base:.5,amp:.25,noise:.15,min:0,max:40,spikeP:.004,spikeMag:5},
+  temp:{base:58,amp:2.2,noise:.4,min:24,max:90,phase:4,spikeP:.0035,spikeMag:4.2},
+  kw:{base:5.1,amp:.6,noise:.14,min:1,max:16,period:2100,phase:3}}
 ];
-ZONES.forEach(z=>['temp','mem','req','iow','kw'].forEach(m=>z[m+'S']=new Sensor(z[m])));
+ZONES.forEach(z=>['util','bw','err','temp','kw'].forEach(m=>z[m+'S']=new Sensor(z[m])));
 const TOPICS=[
- {nm:'iot/+/telemetry',tok:'--s2',dash:[],s:new Sensor({base:742,amp:70,noise:16,min:120,max:1600})},
- {nm:'iot/+/status',tok:'--s3',dash:[7,4],s:new Sensor({base:268,amp:28,noise:8,min:40,max:700})},
- {nm:'iot/+/command',tok:'--s1',dash:[2,4],s:new Sensor({base:96,amp:18,noise:6,min:5,max:400})},
- {nm:'iot/+/ota',tok:'--s4',dash:[9,4,2,4],s:new Sensor({base:34,amp:12,noise:5,min:0,max:280,spikeP:.004,spikeMag:40})}
+ {nm:'gnmi · interfaces',tok:'--s2',dash:[],s:new Sensor({base:742,amp:70,noise:16,min:120,max:1600})},
+ {nm:'snmp · IF-MIB',tok:'--s3',dash:[7,4],s:new Sensor({base:268,amp:28,noise:8,min:40,max:700})},
+ {nm:'netflow · IPFIX',tok:'--s1',dash:[2,4],s:new Sensor({base:418,amp:64,noise:18,min:30,max:1200,spikeP:.003,spikeMag:90})},
+ {nm:'syslog · devices',tok:'--s4',dash:[9,4,2,4],s:new Sensor({base:34,amp:12,noise:5,min:0,max:280,spikeP:.004,spikeMag:40})}
 ];
 const G={
- lat50:new Sensor({base:11,amp:2,noise:.9,min:3,max:90}),
- lat95:new Sensor({base:28,amp:5,noise:2.2,min:8,max:190,spikeP:.0035,spikeMag:28}),
- lat99:new Sensor({base:57,amp:9,noise:4.5,min:14,max:380,spikeP:.004,spikeMag:60}),
- conns:new Sensor({base:50,amp:1.2,noise:.5,min:38,max:56}),
- queue:new Sensor({base:120,amp:60,noise:22,min:0,max:900,spikeP:.004,spikeMag:180}),
+ lat50:new Sensor({base:11,amp:2,noise:.9,min:1,max:90}),
+ lat95:new Sensor({base:28,amp:5,noise:2.2,min:4,max:190,spikeP:.0035,spikeMag:28}),
+ lat99:new Sensor({base:57,amp:9,noise:4.5,min:8,max:380,spikeP:.004,spikeMag:60}),
+ bgp:new Sensor({base:50,amp:1.2,noise:.5,min:38,max:56}),
+ drops:new Sensor({base:120,amp:60,noise:22,min:0,max:900,spikeP:.004,spikeMag:180}),
  loss:new Sensor({base:.8,amp:.35,noise:.14,min:0,max:9,spikeP:.003,spikeMag:1.8}),
  pf:new Sensor({base:.94,amp:.02,noise:.006,min:.72,max:1}),
  net:new Sensor({base:640,amp:120,noise:26,min:40,max:1900,spikeP:.003,spikeMag:260}),
- disk:new Sensor({base:63.5,amp:.4,noise:.05,min:0,max:100}),
+ tcam:new Sensor({base:63.5,amp:.4,noise:.05,min:0,max:100}),
+ disk:new Sensor({base:58.2,amp:.5,noise:.06,min:0,max:100}),
+ wlat50:new Sensor({base:9,amp:1.6,noise:.7,min:2,max:80}),
+ wlat95:new Sensor({base:24,amp:4,noise:1.8,min:6,max:170,spikeP:.0035,spikeMag:24}),
+ wlat99:new Sensor({base:48,amp:8,noise:3.8,min:12,max:340,spikeP:.004,spikeMag:52}),
  cpu:new Sensor({base:38,amp:9,noise:3,min:4,max:99,spikeP:.003,spikeMag:22})
 };
-const SENS=[...ZONES.flatMap(z=>[z.tempS,z.memS,z.reqS,z.iowS,z.kwS]),...TOPICS.map(t=>t.s),...Object.values(G)];
+const SENS=[...ZONES.flatMap(z=>[z.utilS,z.bwS,z.errS,z.tempS,z.kwS]),...TOPICS.map(t=>t.s),...Object.values(G)];
 /* mồi N mẫu lịch sử để dashboard có dữ liệu ngay khi mở, trùng trục thời gian `times` */
 for(let i=0;i<N;i++)SENS.forEach(s=>s.step(i));
 const totKw=i=>ZONES.reduce((s,z)=>s+(i==null?z.kwS.last():z.kwS.at(i)),0);
 const totMsg=i=>TOPICS.reduce((s,t)=>s+(i==null?t.s.last():t.s.at(i)),0);
+const totBw=i=>ZONES.reduce((s,z)=>s+(i==null?z.bwS.last():z.bwS.at(i)),0);
 
 /* ===================== 3. THIẾT BỊ ===================== */
 const TYPES=[
- {id:'API',nm:'API gateway',metric:'mem',unit:'% RAM',d:1},
- {id:'BRK',nm:'MQTT broker',metric:'req',unit:'req/s',d:0},
- {id:'ING',nm:'Ingest worker',metric:'iow',unit:'ms io',d:2},
- {id:'TSDB',nm:'TSDB node',metric:'temp',unit:'°C',d:1},
- {id:'EDGE',nm:'Edge gateway',metric:'net',unit:'Mbps',d:0},
- {id:'PDU',nm:'Rack PDU',metric:'kw',unit:'kW',d:1}
+ {id:'SWC',nm:'Core switch',hn:'core',metric:'bw',unit:'Gbps',d:1},
+ {id:'SWD',nm:'Distribution switch',hn:'dist',metric:'util',unit:'%',d:1},
+ {id:'SWA',nm:'Access switch',hn:'acc',metric:'net',unit:'Mbps',d:0},
+ {id:'RTR',nm:'Router biên',hn:'rtr',metric:'temp',unit:'°C',d:1},
+ {id:'FWL',nm:'Firewall',hn:'fw',metric:'err',unit:'lỗi/s',d:2},
+ {id:'WAP',nm:'Wi-Fi AP',hn:'ap',metric:'util',unit:'%',d:1}
 ];
-const PROTOS=['25 GbE','10 GbE','1 GbE','WireGuard'];
-const AGV=['2.9.1','3.0.4','3.1.2'];
-const STLBL={ok:'Up',warn:'Warning',crit:'Critical',off:'Down'};
+const ROLEMAP={CORE:['SWC','RTR'],DIST:['SWD','FWL'],ACC:['SWA','WAP'],WAN:['RTR','FWL']};
+const SITES=['HN-DC1','HN-DC2','HCM-DC1','Campus-A'];
+const PROTOS=['100G QSFP28','40G QSFP+','10G SFP+','1G RJ45'];
+const FWV=['9.3(8)','10.2(5)','10.4(3)'];
+const STLBL={ok:'Up',warn:'Warning',crit:'Critical',off:'Unreachable'};
 const DEV=[];
 for(let i=1;i<=50;i++){
-  const z=ZONES[i%4], ty=TYPES[i%6];
+  const z=ZONES[i%4], ty=TYPES.find(t=>t.id===ROLEMAP[z.id][Math.floor(i/4)%2]);
   const st=i===7?'crit':(i===4||i===19||i===33)?'warn':(i===11||i===41)?'off':'ok';
-  DEV.push({id:'srv-'+String(i).padStart(2,'0'),zone:z.id,z,ty,proto:PROTOS[i%4],
-    agv:AGV[i%7===0?0:i%3===0?1:2],dfree:Math.max(4,Math.min(96,Math.round(8+rnd()*86))),
-    rtt:+(0.3+rnd()*13).toFixed(2),ip:'10.8.'+(1+i%4)+'.'+(10+i),
-    rack:'R'+(1+i%4)+'-U'+String(4+(i%16)*2).padStart(2,'0'),
-    bias:(rnd()-.5)*(ty.metric==='req'?90:ty.metric==='net'?70:ty.metric==='kw'?9:ty.metric==='mem'?6:1.6),
+  DEV.push({id:ty.hn+'-'+String(i).padStart(2,'0'),zone:z.id,z,ty,proto:PROTOS[i%4],
+    fwv:FWV[i%7===0?0:i%3===0?1:2],tcam:Math.max(4,Math.min(96,Math.round(8+rnd()*86))),
+    rtt:+(0.3+rnd()*13).toFixed(2),ip:'10.'+(1+i%4)+'.'+(10+i)+'.1',
+    loc:SITES[i%4]+' · IDF-'+String(1+(i%9)).padStart(2,'0'),
+    bias:(rnd()-.5)*(ty.metric==='net'?70:ty.metric==='util'?9:ty.metric==='bw'?5:ty.metric==='temp'?2.4:.6),
     st,seen:st==='off'?Math.round(600+rnd()*900):Math.round(rnd()*9),hist:[],states:[]});
 }
 const devVal=d=>(d.ty.metric==='net'?G.net.last():d.z[d.ty.metric+'S'].last())+d.bias;
@@ -384,45 +399,51 @@ const devValAt=(d,i)=>(d.ty.metric==='net'?G.net.at(i):d.z[d.ty.metric+'S'].at(i
 
 /* ===================== 4. ALERT RULE (có label + runbook) ===================== */
 const RULES=[
- {id:'NodeTempHigh',sev:'crit',forS:120,grp:'datacenter',
-  expr:'max by(cluster) (node_hwmon_temp_celsius{cluster="C3"}) > 78',runbook:'RB-014 · Kiểm tra quạt rack & luồng khí lạnh hàng lạnh',
-  labels:{team:'datacenter',cluster:'C3',severity:'critical'},
-  test:()=>{const v=ZONES[2].tempS.last();return v>78?'value='+fx(v)+'°C ngưỡng=78°C':null;}},
- {id:'MemoryPressure',sev:'serious',forS:300,grp:'storage',
-  expr:'max by(cluster) ((1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100) > 92',
-  runbook:'RB-007 · Hạ cache TSDB, soi rò rỉ bộ nhớ của ingest',
-  labels:{team:'storage',cluster:'C3',severity:'major'},
-  test:()=>{const v=ZONES[2].memS.last();return v>92?'RAM='+fx(v)+'% ngưỡng=92%':null;}},
- {id:'RequestRateHigh',sev:'warn',forS:600,grp:'platform',
-  expr:'sum by(cluster) (rate(iot_requests_total[1m])) > 1150',runbook:'RB-021 · Tăng replica ingest / bật back-pressure',
-  labels:{team:'platform',severity:'warning'},
-  test:()=>{const v=Math.max(...ZONES.map(z=>z.reqS.last()));return v>1150?'value='+Math.round(v)+' req/s':null;}},
- {id:'DiskIOWaitHigh',sev:'serious',forS:180,grp:'storage',
-  expr:'max by(cluster) (rate(node_disk_io_time_seconds_total[1m]) * 1000) > 5.2',
-  runbook:'RB-009 · Soi hàng đợi NVMe & lịch compaction',
-  labels:{team:'storage',severity:'major'},
-  test:()=>{const v=Math.max(...ZONES.map(z=>z.iowS.last()));return v>5.2?'iowait='+fx(v,2)+'ms':null;}},
- {id:'IngestLatencyHigh',sev:'warn',forS:300,grp:'platform',
-  expr:'histogram_quantile(0.95, rate(influx_write_duration_seconds_bucket[5m])) > 0.1',
-  runbook:'RB-002 · Kiểm tra batch size & WAL',labels:{team:'platform',slo:'write-latency',severity:'warning'},
+ {id:'InterfaceDown',sev:'serious',forS:120,grp:'noc',
+  expr:'ifOperStatus{job="snmp-interfaces"} == 2 unless ifAdminStatus == 2',
+  runbook:'RB-001 · Kiểm tra cáp, SFP và cấu hình port trước khi báo nhà mạng',
+  labels:{team:'noc',severity:'major'},
+  test:()=>{const L=DEV.filter(d=>d.st==='off');return L.length?L.length+' thiết bị: '+L.map(d=>d.id).join(', '):null;}},
+ {id:'BGPSessionLost',sev:'crit',forS:60,grp:'wan',
+  expr:'count(bgp_session_state{state="established"}) < 45',
+  runbook:'RB-003 · Soi hold-time, prefix-limit rồi liên hệ NOC của ISP',
+  labels:{team:'wan',severity:'critical'},
+  test:()=>{const v=G.bgp.last();return v<45?Math.round(v)+'/50 phiên established':null;}},
+ {id:'LinkSaturation',sev:'serious',forS:300,grp:'capacity',
+  expr:'max by(layer) (interface_utilization_ratio{layer="WAN"}) > 0.85',
+  runbook:'RB-012 · Dịch tải sang uplink dự phòng, xem lại policy QoS',
+  labels:{team:'wan',layer:'WAN',severity:'major'},
+  test:()=>{const v=ZONES[3].utilS.last();return v>85?'util='+fx(v)+'% ngưỡng=85%':null;}},
+ {id:'HighErrorRate',sev:'warn',forS:300,grp:'noc',
+  expr:'sum by(layer) (rate(ifInErrors[5m])) > 5',
+  runbook:'RB-009 · Thay SFP/patch cord, kiểm tra duplex mismatch',
+  labels:{team:'noc',severity:'warning'},
+  test:()=>{const v=Math.max(...ZONES.map(z=>z.errS.last()));return v>5?'CRC='+fx(v,2)+' lỗi/s':null;}},
+ {id:'PacketLoss',sev:'warn',forS:300,grp:'noc',
+  expr:'avg_over_time(probe_loss_ratio[10m]) > 0.025',
+  runbook:'RB-011 · Chạy mtr theo chặng, khoanh vùng tuyến lỗi',
+  labels:{team:'noc',severity:'warning'},
+  test:()=>{const v=G.loss.last();return v>2.5?'loss='+fx(v,2)+'%':null;}},
+ {id:'BackboneLatencyHigh',sev:'warn',forS:300,grp:'noc',
+  expr:'histogram_quantile(0.95, rate(probe_icmp_duration_seconds_bucket[5m])) > 0.1',
+  runbook:'RB-002 · Kiểm tra định tuyến và tải chặng trục',
+  labels:{team:'noc',slo:'rtt-p95',severity:'warning'},
   test:()=>{const v=G.lat95.last();return v>90?'p95='+Math.round(v)+'ms SLO=100ms':null;}},
- {id:'IngestDropRatio',sev:'warn',forS:300,grp:'platform',
-  expr:'avg_over_time(ingest_dropped_ratio[10m]) > 0.025',runbook:'RB-011 · Soi buffer Telegraf & MTU đường truyền',
-  labels:{team:'platform',severity:'warning'},
-  test:()=>{const v=G.loss.last();return v>2.5?'drop='+fx(v,2)+'%':null;}},
- {id:'BrokerQueueDepth',sev:'serious',forS:120,grp:'platform',
-  expr:'emqx_queued_messages > 600',runbook:'RB-004 · Scale consumer ingest',
-  labels:{team:'platform',severity:'major'},
-  test:()=>{const v=G.queue.last();return v>600?'queue='+grp(v)+' msg':null;}},
- {id:'DiskSpaceLow',sev:'warn',forS:1800,grp:'storage',
-  expr:'min by(instance) (node_filesystem_avail_bytes / node_filesystem_size_bytes * 100) < 15',
-  runbook:'RB-017 · Dọn WAL, mở rộng volume theo host',
-  labels:{team:'storage',severity:'warning'},
-  test:()=>{const L=DEV.filter(d=>d.dfree<15&&d.st!=='off');return L.length?L.length+' host: '+L.slice(0,3).map(d=>d.id).join(', '):null;}},
- {id:'NodeDown',sev:'serious',forS:300,grp:'sre',
-  expr:'up{job="iot-node"} == 0',runbook:'RB-001 · Quy trình xử lý host mất scrape',
-  labels:{team:'sre',severity:'major'},
-  test:()=>{const L=DEV.filter(d=>d.st==='off');return L.length?L.length+' host: '+L.map(d=>d.id).join(', '):null;}}
+ {id:'OutputQueueDrops',sev:'serious',forS:120,grp:'capacity',
+  expr:'sum(rate(ifOutDiscards[1m])) > 600',
+  runbook:'RB-004 · Xem lại shaping/buffer trên uplink nghẽn',
+  labels:{team:'capacity',severity:'major'},
+  test:()=>{const v=G.drops.last();return v>600?'drops='+grp(v)+' pkt/s':null;}},
+ {id:'TCAMExhaustion',sev:'warn',forS:1800,grp:'noc',
+  expr:'min by(device) (tcam_free_ratio * 100) < 15',
+  runbook:'RB-017 · Gộp ACL, chuyển SDM template',
+  labels:{team:'noc',severity:'warning'},
+  test:()=>{const L=DEV.filter(d=>d.tcam<15&&d.st!=='off');return L.length?L.length+' thiết bị: '+L.slice(0,3).map(d=>d.id).join(', '):null;}},
+ {id:'DeviceTempHigh',sev:'crit',forS:120,grp:'datacenter',
+  expr:'max by(layer) (device_temperature_celsius{layer="WAN"}) > 68',
+  runbook:'RB-014 · Kiểm tra quạt chassis và nhiệt độ hàng lạnh',
+  labels:{team:'datacenter',layer:'WAN',severity:'critical'},
+  test:()=>{const v=ZONES[3].tempS.last();return v>68?'value='+fx(v)+'°C ngưỡng=68°C':null;}}
 ];
 const SEVW={crit:0,serious:1,warn:2,ok:3};
 const sevIcon={crit:'🔥',serious:'📡',warn:'⚠️',ok:'✅'};
@@ -430,12 +451,12 @@ const sevCol={crit:'--crit',serious:'--serious',warn:'--warn',ok:'--ok'};
 let ALERTS=new Map(), ANN=[], LOGS=[], logFilter='ALL';
 const INCIDENTS=[];
 {const now=Date.now();
- [['INC-1042','NodeTempHigh','crit',1.6,38,'Quạt rack R3 hỏng, CPU cụm TSDB lên 82 °C','datacenter'],
-  ['INC-1041','NodeDown','serious',2.4,96,'srv-11 kernel panic sau khi vá kernel 6.8','sre'],
-  ['INC-1039','IngestLatencyHigh','warn',4.1,54,'WAL InfluxDB đầy sau đợt backfill 30 ngày','platform'],
-  ['INC-1035','MemoryPressure','serious',6.7,22,'Rò rỉ bộ nhớ ở ingest worker bản 3.0.4','storage'],
-  ['INC-1031','IngestDropRatio','warn',9.2,131,'Sai MTU giữa hai switch ToR làm rớt gói','platform'],
-  ['INC-1028','BrokerQueueDepth','serious',12.8,41,'Consumer ingest bị OOMKilled','platform']]
+ [['INC-1042','DeviceTempHigh','crit',1.6,38,'Quạt chassis rtr-04 hỏng, nhiệt lên 74 °C','datacenter'],
+  ['INC-1041','InterfaceDown','serious',2.4,96,'Đứt cáp quang tuyến HN-DC1 ↔ HN-DC2','noc'],
+  ['INC-1039','BGPSessionLost','crit',4.1,54,'ISP B reset phiên khi bảo trì, hold-time hết hạn','wan'],
+  ['INC-1035','HighErrorRate','serious',6.7,22,'SFP+ lỗi ở acc-22 Gi1/0/24, CRC tăng vọt','noc'],
+  ['INC-1031','LinkSaturation','warn',9.2,131,'Uplink WAN chạm 94% giờ cao điểm','capacity'],
+  ['INC-1028','OutputQueueDrops','serious',12.8,41,'Broadcast storm ở IDF-03 gây drop hàng đợi','noc']]
  .forEach(([id,rule,sev,days,mtr,cause,team])=>INCIDENTS.push({id,rule,sev,
    start:now-days*864e5,mttr:mtr,cause,team,state:'resolved'}));}
 function fire(key,now){
@@ -463,40 +484,41 @@ function evalAlerts(now){
 const alState=(a,now)=>(now-a.since)>=a.rule.forS*1000?'firing':'pending';
 function log(lv,ms,t){LOGS.unshift({lv,ms,t:t||Date.now()});if(LOGS.length>160)LOGS.pop();}
 function randomLog(t){
-  const r=rnd(), d=DEV[Math.floor(rnd()*50)];
-  if(r<.05){log('WARN','qos1 inflight window full instance='+d.id+' queue='+Math.round(G.queue.last()),t);return;}
-  if(r<.08){log('ERROR','publish timeout topic=iot/'+ZONES[Math.floor(rnd()*4)].id.toLowerCase()+'/telemetry retry=2 instance='+d.id,t);return;}
-  if(r<.13){log('DEBUG','scrape job=iot-node instance='+d.ip+':9100 duration='+fx(4+rnd()*42)+'ms samples='+Math.round(380+rnd()*900),t);return;}
-  if(r<.18){log('INFO','tsdb compaction shard='+Math.round(rnd()*48)+' level=2 size='+Math.round(120+rnd()*820)+'MB in '+fx(1+rnd()*9,1)+'s',t);return;}
-  log('INFO','recv topic=iot/'+d.zone.toLowerCase()+'/'+d.id+'/telemetry qos=1 payload={"'+d.ty.metric+'":'+fx(devVal(d),d.ty.d)+',"disk_free":'+d.dfree+'}',t);
+  const r=rnd(), d=DEV[Math.floor(rnd()*50)], po='Gi1/0/'+(1+Math.floor(rnd()*48));
+  if(r<.05){log('WARN','%LINK-3-UPDOWN: Interface '+po+' on '+d.id+', changed state to down',t);return;}
+  if(r<.09){log('ERROR','%BGP-5-ADJCHANGE: neighbor '+d.ip+' Down - hold time expired (AS '+(64500+Math.floor(rnd()*40))+')',t);return;}
+  if(r<.13){log('WARN','%SW_MATM-4-MACFLAP_NOTIF: Host 00:1b:'+Math.floor(rnd()*90+10)+':'+Math.floor(rnd()*90+10)+' in vlan '+(10+Math.floor(rnd()*40))+' is flapping between '+po+' and Gi1/0/2',t);return;}
+  if(r<.18){log('DEBUG','snmp poll device='+d.ip+' oid=ifHCInOctets rtt='+fx(d.rtt,2)+'ms vars='+Math.round(48+rnd()*220),t);return;}
+  if(r<.23){log('INFO','gnmi subscribe '+d.id+' path=/interfaces/interface/state/counters sample=10s',t);return;}
+  log('INFO','ifStats '+d.id+' '+po+' in='+fx(devVal(d),d.ty.d)+' '+d.ty.unit+' crc='+fx(d.z.errS.last(),2)+'/s tcam_free='+d.tcam+'%',t);
 }
 {const now=Date.now();for(let i=40;i>=1;i--)randomLog(now-i*2600);evalAlerts(now);}
 
 /* ===================== 5. SLO ===================== */
 const SLOS=[
- {nm:'Ingest — tỉ lệ bản tin ghi thành công',target:99.5,win:'30 ngày',unit:'%',
+ {nm:'Khả dụng đường trục (loss < 1%)',target:99.5,win:'30 ngày',unit:'%',
   sli:()=>100-G.loss.avg(N)},
- {nm:'Độ trễ ghi TSDB p95 < 100 ms',target:99.0,win:'30 ngày',unit:'%',
+ {nm:'RTT backbone p95 < 100 ms',target:99.0,win:'30 ngày',unit:'%',
   sli:()=>G.lat95.frac(N,v=>v<100)*100},
- {nm:'Broker cluster khả dụng (≥ 45 kết nối)',target:99.9,win:'30 ngày',unit:'%',
-  sli:()=>G.conns.frac(N,v=>v>=45)*100},
- {nm:'Máy chủ trả lời scrape đúng hạn',target:98.0,win:'7 ngày',unit:'%',
+ {nm:'Phiên BGP ổn định (≥ 45 phiên)',target:99.9,win:'30 ngày',unit:'%',
+  sli:()=>G.bgp.frac(N,v=>v>=45)*100},
+ {nm:'Thiết bị phản hồi poll đúng hạn',target:98.0,win:'7 ngày',unit:'%',
   sli:()=>DEV.filter(d=>d.st!=='off').length/DEV.length*100}
 ];
 const sloBudget=s=>{const allow=100-s.target,used=Math.max(0,100-s.sli());
   return{allow,used,left:Math.max(0,1-used/allow),burn:used/allow};};
 const MAINT=[
- ['CW46 · 14/11 22:00–02:00','Nâng agent 3.1.2 cho 18 host cụm C2','đã lên lịch','platform'],
- ['CW46 · 16/11 06:00–07:30','Mở rộng volume TSDB thêm 2 TB (DiskSpaceLow)','đã lên lịch','storage'],
- ['CW47 · 19/11 23:00–01:00','Nâng EMQX 5.8 → 5.9, rolling restart 3 node','chờ duyệt','platform'],
- ['CW47 · 21/11 08:00–12:00','Vá kernel 6.8 + reboot lần lượt 9 host cụm C4','chờ duyệt','sre']
+ ['CW46 · 14/11 22:00–02:00','Nâng NX-OS 10.4(3) cho 6 switch tầng DIST','đã lên lịch','noc'],
+ ['CW46 · 16/11 06:00–07:30','Thay 8 SFP+ lỗi CRC tại HN-DC1 · IDF-03','đã lên lịch','noc'],
+ ['CW47 · 19/11 23:00–01:00','Chuyển peering ISP B sang cổng 100G, reload router biên','chờ duyệt','wan'],
+ ['CW47 · 21/11 08:00–12:00','Bảo trì UPS và PDU hàng rack core HN-DC1','chờ duyệt','datacenter']
 ];
 const ONCALL=[
- ['Kíp trực A (hiện tại)','platform','ops-a@iot-platform.vn','+84 24 1800 xxx1','đang trực'],
- ['Kíp trực B','platform','ops-b@iot-platform.vn','+84 24 1800 xxx2','18:00 nhận ca'],
- ['SRE hạ tầng','sre','sre@iot-platform.vn','+84 24 1800 xxx3','theo lịch'],
- ['Storage / TSDB','storage','storage@iot-platform.vn','+84 24 1800 xxx4','theo lịch'],
- ['Kỹ thuật DC (rack/điện)','datacenter','dc@iot-platform.vn','+84 24 1800 xxx5','theo lịch']
+ ['NOC ca A (hiện tại)','noc','noc-a@net-ops.vn','+84 24 1800 xxx1','đang trực'],
+ ['NOC ca B','noc','noc-b@net-ops.vn','+84 24 1800 xxx2','18:00 nhận ca'],
+ ['Kỹ sư WAN / peering','wan','wan@net-ops.vn','+84 24 1800 xxx3','theo lịch'],
+ ['Quy hoạch dung lượng','capacity','capacity@net-ops.vn','+84 24 1800 xxx4','theo lịch'],
+ ['Kỹ thuật DC (nguồn/mát)','datacenter','dc@net-ops.vn','+84 24 1800 xxx5','theo lịch']
 ];
 
 /* ===================== 6. HELPER VẼ ===================== */
@@ -600,11 +622,11 @@ function TS(host,cfg){
 
 /* ===================== 8. DỮ LIỆU DẪN XUẤT ===================== */
 const HRS=[];{const h=new Date().getHours();for(let i=23;i>=0;i--)HRS.push((h-i+24)%24);}
-const HEAT=ZONES.map(z=>HRS.map((_,i)=>z.req.base+randn()*60+(i>14?90:0)+rnd()*80));
+const HEAT=ZONES.map(z=>HRS.map((_,i)=>z.bw.base*(.72+(i>=7&&i<=18?.34:0))+randn()*2.4+rnd()*3));
 const LATB=['< 10 ms','10–25','25–50','50–100','100–200','> 200'];
 const LATH=[];for(let c=0;c<24;c++){const cl=[];const tot=120+Math.round(rnd()*60);
   [.42,.3,.16,.08,.03,.01].forEach(p=>cl.push(Math.round(tot*p*(.7+rnd()*.6))));LATH.push(cl);}
-const ENH=HRS.map(h=>(330+(h>=7&&h<=18?150:0))+randn()*34+rnd()*40);
+const ENH=HRS.map(h=>(38+(h>=7&&h<=18?13:0))+randn()*2.6+rnd()*3);
 let subTick=0;
 
 /* ===================== 9. CÁC BỘ VẼ ===================== */
@@ -777,7 +799,7 @@ function mkTimeline(body,cfg){
     c.fillStyle=TH['--ink3'];c.textAlign='center';c.textBaseline='top';
     const base=times.length-n;
     for(let i=0;i<n;i+=Math.max(1,Math.round(n/5)))c.fillText(hh(times[base+i]),PL+cw*i,PT+h+4);}
-  return {render:draw,data(){return{cols:['Host','Trạng thái','Cụm','Vai trò'],
+  return {render:draw,data(){return{cols:['Thiết bị','Trạng thái','Tầng','Loại'],
     rows:cfg.list().map(d=>[d.id,STLBL[d.st],d.zone,d.ty.nm])};}};
 }
 function mkHist(body,cfg){
@@ -843,13 +865,13 @@ function mkDonut(body,cfg){
 }
 function mkDevTable(body){
   const bar=document.createElement('div');bar.className='logbar';
-  bar.innerHTML='<input class="srch" id="devSrch" placeholder="Tìm hostname…" aria-label="Tìm máy chủ">'+
+  bar.innerHTML='<input class="srch" id="devSrch" placeholder="Tìm tên thiết bị…" aria-label="Tìm thiết bị">'+
     '<button class="chip on" data-st="all">Tất cả</button>'+['ok','warn','crit','off'].map(s=>
       '<button class="chip" data-st="'+s+'">'+STLBL[s]+'</button>').join('');
   const sc=document.createElement('div');sc.className='scroll';sc.style.maxHeight='320px';
   const tb=document.createElement('table');tb.className='t wide sortable';
-  const COLS=[['id','Host'],['zone','Cụm'],['ty','Vai trò'],['rack','Rack'],['proto','Uplink'],['agv','Agent'],
-    ['rtt','RTT',1],['val','Giá trị',1],['dfree','Đĩa trống',1],['st','Trạng thái'],['seen','Last scrape',1],['sp','20 mẫu']];
+  const COLS=[['id','Thiết bị'],['zone','Tầng'],['ty','Loại'],['loc','Vị trí'],['proto','Uplink'],['fwv','Firmware'],
+    ['rtt','RTT',1],['val','Giá trị',1],['tcam','TCAM trống',1],['st','Trạng thái'],['seen','Last poll',1],['sp','20 mẫu']];
   let sort='id',dir=1,stFilter='all',q='';
   tb.innerHTML='<thead><tr>'+COLS.map(c=>'<th data-k="'+c[0]+'"'+(c[2]?' class="r"':'')+'>'+c[1]+' <span class="ar"></span></th>').join('')+'</tr></thead><tbody></tbody>';
   const tbody=tb.querySelector('tbody');sc.append(tb);body.append(bar,sc);
@@ -865,14 +887,14 @@ function mkDevTable(body){
   return {render(){
       tb.querySelectorAll('th').forEach(th=>th.querySelector('.ar').textContent=th.dataset.k===sort?(dir>0?'▲':'▼'):'');
       const L=rows();
-      if(!L.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty">Không có máy chủ khớp bộ lọc</div></td></tr>';return;}
+      if(!L.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty">Không có thiết bị khớp bộ lọc</div></td></tr>';return;}
       tbody.innerHTML=L.map(d=>'<tr><td style="font-family:var(--mono)" title="'+d.ip+'">'+d.id+'</td><td>'+d.zone+'</td>'+
-        '<td style="color:var(--ink2)">'+d.ty.nm+'</td><td style="font-family:var(--mono);color:var(--ink3)">'+d.rack+'</td>'+
+        '<td style="color:var(--ink2)">'+d.ty.nm+'</td><td style="color:var(--ink3)">'+d.loc+'</td>'+
         '<td style="color:var(--ink2)">'+d.proto+'</td>'+
-        '<td style="font-family:var(--mono);color:'+(d.agv==='3.1.2'?'':col('--warn'))+'">'+d.agv+'</td>'+
+        '<td style="font-family:var(--mono);color:'+(d.fwv==='10.4(3)'?'':col('--warn'))+'">'+d.fwv+'</td>'+
         '<td class="r num" style="color:'+col(d.rtt>=8?'--crit':d.rtt>=4?'--warn':'')+'">'+fx(d.rtt,2)+' ms</td>'+
         '<td class="r num">'+(d.st==='off'?'—':fx(devVal(d),d.ty.d)+' '+d.ty.unit)+'</td>'+
-        '<td class="r num" style="color:'+col(d.dfree<15?'--crit':d.dfree<30?'--warn':d.dfree<55?'--serious':'--ok')+'">'+d.dfree+'%</td>'+
+        '<td class="r num" style="color:'+col(d.tcam<15?'--crit':d.tcam<30?'--warn':d.tcam<55?'--serious':'--ok')+'">'+d.tcam+'%</td>'+
         '<td><span class="pill '+(d.st==='off'?'off':d.st)+'">'+STLBL[d.st]+'</span></td>'+
         '<td class="r num" style="color:'+(d.seen>60?col('--crit'):'')+'">'+dur(d.seen*1000)+'</td>'+
         '<td><canvas data-id="'+d.id+'" width="64" height="18"></canvas></td></tr>').join('');
@@ -882,8 +904,8 @@ function mkDevTable(body){
         const h=d.hist.slice(-20),lo=Math.min(...h),hi=Math.max(...h),rg=(hi-lo)||1;
         c.beginPath();h.forEach((v,i)=>{const x=64*i/(h.length-1),y=16-13*(v-lo)/rg;i?c.lineTo(x,y):c.moveTo(x,y);});
         c.strokeStyle=col(d.st==='off'?'--off':d.st==='crit'?'--crit':d.st==='warn'?'--warn':d.z.tok);c.lineWidth=1.3;c.stroke();});},
-    data(){return{cols:['Host','IP','Cụm','Vai trò','Rack','Agent','RTT','Giá trị','Đĩa trống','Trạng thái'],
-      rows:rows().map(d=>[d.id,d.ip,d.zone,d.ty.nm,d.rack,d.agv,fx(d.rtt,2)+' ms',fx(devVal(d),d.ty.d)+' '+d.ty.unit,d.dfree+'%',STLBL[d.st]])};}};
+    data(){return{cols:['Thiết bị','IP quản trị','Tầng','Loại','Vị trí','Firmware','RTT','Giá trị','TCAM trống','Trạng thái'],
+      rows:rows().map(d=>[d.id,d.ip,d.zone,d.ty.nm,d.loc,d.fwv,fx(d.rtt,2)+' ms',fx(devVal(d),d.ty.d)+' '+d.ty.unit,d.tcam+'%',STLBL[d.st]])};}};
 }
 function mkLogs(body,cfg){
   const bar=document.createElement('div');bar.className='logbar';
@@ -915,13 +937,13 @@ function mkPlan(body){
   const wrap=document.createElement('div');wrap.className='svgwrap plan';
   const Z=[[6,6],[238,6],[6,136],[238,136]];
   DEV.forEach(d=>{const o=Z[ZONES.indexOf(d.z)];d.px=o[0]+18+rnd()*180;d.py=o[1]+30+rnd()*78;});
-  wrap.innerHTML='<svg viewBox="0 0 460 262" role="img" aria-label="Sơ đồ rack với vị trí và trạng thái máy chủ">'+
+  wrap.innerHTML='<svg viewBox="0 0 460 262" role="img" aria-label="Sơ đồ topology bốn tầng mạng với trạng thái từng thiết bị">'+
     ZONES.map((z,i)=>'<g><rect x="'+Z[i][0]+'" y="'+Z[i][1]+'" width="216" height="120" rx="4" class="zr"/>'+
       '<text x="'+(Z[i][0]+10)+'" y="'+(Z[i][1]+19)+'" font-family="Inter,sans-serif" font-size="11" font-weight="600" class="zl">'+z.nm+'</text>'+
       '<text x="'+(Z[i][0]+206)+'" y="'+(Z[i][1]+19)+'" text-anchor="end" font-family="Roboto Mono,monospace" font-size="10.5" class="zt" data-z="'+i+'">–</text></g>').join('')+
-    '<g class="dots">'+DEV.map((d,i)=>'<circle data-i="'+i+'" cx="'+fx(d.px)+'" cy="'+fx(d.py)+'" r="4"><title>'+d.id+' · '+d.ty.nm+' · '+d.rack+'</title></circle>').join('')+'</g>'+
+    '<g class="dots">'+DEV.map((d,i)=>'<circle data-i="'+i+'" cx="'+fx(d.px)+'" cy="'+fx(d.py)+'" r="4"><title>'+d.id+' · '+d.ty.nm+' · '+d.loc+'</title></circle>').join('')+'</g>'+
     '<g><rect x="196" y="112" width="68" height="38" rx="4" class="gw"/>'+
-    '<text x="230" y="129" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" font-weight="600" class="zl">Core switch</text>'+
+    '<text x="230" y="129" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" font-weight="600" class="zl">Internet / ISP</text>'+
     '<text x="230" y="142" text-anchor="middle" font-family="Roboto Mono,monospace" font-size="9" class="zt" data-gw="1">–</text></g></svg>';
   body.append(wrap);
   return {render(){
@@ -930,20 +952,20 @@ function mkPlan(body){
       wrap.querySelectorAll('.zl').forEach(t=>t.setAttribute('fill',TH['--ink']));
       wrap.querySelectorAll('.zt').forEach(t=>t.setAttribute('fill',TH['--ink3']));
       ZONES.forEach((z,i)=>{const t=wrap.querySelector('.zt[data-z="'+i+'"]');
-        if(t)t.textContent=fx(z.tempS.last())+'°C · '+Math.round(z.reqS.last())+' req/s';});
-      const gw=wrap.querySelector('.zt[data-gw="1"]');if(gw)gw.textContent=grp(totMsg())+' msg/s';
+        if(t)t.textContent=fx(z.utilS.last())+'% · '+fx(z.bwS.last(),1)+' Gbps';});
+      const gw=wrap.querySelector('.zt[data-gw="1"]');if(gw)gw.textContent=fx(totBw(),1)+' Gbps';
       wrap.querySelectorAll('.dots circle').forEach(ci=>{const d=DEV[+ci.dataset.i];
         const on=ZSEL.has(d.zone)&&TSEL.has(d.ty.id);
         ci.setAttribute('fill',col(d.st==='off'?'--off':d.st==='crit'?'--crit':d.st==='warn'?'--warn':'--ok'));
         ci.setAttribute('opacity',on?(d.st==='off'?.5:1):.12);
         ci.setAttribute('r',d.st==='crit'?5.5:d.st==='warn'?4.8:4);});},
-    data(){return{cols:['Cụm','Số host','Nhiệt CPU','Tải','RAM'],
-      rows:ZONES.map(z=>[z.nm,String(DEV.filter(d=>d.zone===z.id).length),fx(z.tempS.last())+' °C',
-        Math.round(z.reqS.last())+' req/s',fx(z.memS.last())+' %'])};}};
+    data(){return{cols:['Tầng','Số thiết bị','Băng thông','Mức dùng uplink','Lỗi CRC','Nhiệt độ'],
+      rows:ZONES.map(z=>[z.nm,String(DEV.filter(d=>d.zone===z.id).length),fx(z.bwS.last(),1)+' Gbps',
+        fx(z.utilS.last())+' %',fx(z.errS.last(),2)+' /s',fx(z.tempS.last())+' °C'])};}};
 }
 function mkFlow(body){
   const wrap=document.createElement('div');wrap.className='svgwrap flow';
-  wrap.innerHTML='<svg viewBox="0 0 980 176" role="img" aria-label="Luồng dữ liệu từ thiết bị IoT qua các cụm máy chủ tới Grafana">'+
+  wrap.innerHTML='<svg viewBox="0 0 980 176" role="img" aria-label="Luồng thu thập telemetry từ thiết bị mạng tới Grafana">'+
   '<defs><path id="f1" d="M172 56 H266"/><path id="f2" d="M172 112 H266"/><path id="f3" d="M402 84 H466"/>'+
   '<path id="f4" d="M602 84 H666"/><path id="f5" d="M802 84 H866"/>'+
   '<marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker></defs>'+
@@ -958,14 +980,14 @@ function mkFlow(body){
   '<rect x="266" y="48" width="136" height="72" rx="4"/><rect x="466" y="48" width="136" height="72" rx="4"/>'+
   '<rect x="666" y="48" width="136" height="72" rx="4"/><rect x="866" y="48" width="86" height="72" rx="4" class="last"/></g>'+
   '<g font-family="Inter,sans-serif" font-size="12.5" font-weight="600" class="tt">'+
-  '<text x="42" y="52">12.400 × client IoT</text><text x="42" y="108">8 × edge gateway</text>'+
-  '<text x="282" y="74">LB / TLS (HAProxy)</text><text x="482" y="74">EMQX cluster · 3 node</text>'+
+  '<text x="42" y="52">34 × switch / router</text><text x="42" y="108">16 × firewall &amp; AP</text>'+
+  '<text x="282" y="74">Collector gNMI / SNMP</text><text x="482" y="74">Kafka telemetry bus</text>'+
   '<text x="682" y="74">Ingest → InfluxDB</text><text x="880" y="74">Grafana</text></g>'+
   '<g font-family="Roboto Mono,monospace" font-size="10.5" class="st">'+
-  '<text x="42" y="70">MQTT 3.1.1 · QoS 1</text><text x="42" y="126">C4 · 25 GbE uplink</text>'+
-  '<text x="282" y="92">TLS 1.3 · keepalive 60s</text><text x="282" y="107" data-f="up">–</text>'+
-  '<text x="482" y="92">C2 · shared subscription</text><text x="482" y="107" data-f="conn">–</text>'+
-  '<text x="682" y="92">C1 batch 5s → C3 RP 90d</text><text x="682" y="107" data-f="lat">–</text>'+
+  '<text x="42" y="70">streaming telemetry 10s</text><text x="42" y="126">SNMP v3 · poll 60s</text>'+
+  '<text x="282" y="92">gNMI dial-in · TLS 1.3</text><text x="282" y="107" data-f="up">–</text>'+
+  '<text x="482" y="92">6 partition · retention 24h</text><text x="482" y="107" data-f="conn">–</text>'+
+  '<text x="682" y="92">batch 5s · RP 90d</text><text x="682" y="107" data-f="lat">–</text>'+
   '<text x="880" y="92">5 dashboard · Grafana 11.3</text><text x="880" y="107" data-f="al">–</text></g></svg>';
   body.append(wrap);
   return {render(){
@@ -978,13 +1000,13 @@ function mkFlow(body){
       [['pk1','--s1'],['pk2','--s3'],['pk3','--s2'],['pk4','--s4']].forEach(p=>
         wrap.querySelectorAll('.'+p[0]+' circle').forEach(ci=>ci.setAttribute('fill',col(p[1]))));
       const q=s=>wrap.querySelector('[data-f="'+s+'"]');
-      q('up').textContent='ingress '+grp(totMsg())+' msg/s';
-      q('conn').textContent=Math.round(G.conns.last())+' conn · q='+Math.round(G.queue.last());
+      q('up').textContent='telemetry '+grp(totMsg())+' msg/s';
+      q('conn').textContent=DEV.filter(d=>d.st!=='off').length+' thiết bị stream · lag='+Math.round(G.drops.last()/8);
       q('lat').textContent='p95 '+Math.round(G.lat95.last())+' ms';
       q('al').textContent=ALERTS.size+' alert mở';},
-    data(){return{cols:['Chặng','Chỉ số'],rows:[['Ingress',grp(totMsg())+' msg/s'],
-      ['Broker',Math.round(G.conns.last())+' connections'],['Queue',Math.round(G.queue.last())+' msg'],
-      ['TSDB p95',Math.round(G.lat95.last())+' ms'],['Alerts mở',String(ALERTS.size)]]};}};
+    data(){return{cols:['Chặng','Chỉ số'],rows:[['Telemetry',grp(totMsg())+' msg/s'],
+      ['Thiết bị stream',DEV.filter(d=>d.st!=='off').length+'/50'],['Băng thông mạng',fx(totBw(),1)+' Gbps'],
+      ['RTT p95',Math.round(G.lat95.last())+' ms'],['Alert mở',String(ALERTS.size)]]};}};
 }
 function mkTable(body,cfg){
   const sc=document.createElement('div');sc.className='scroll';if(cfg.max)sc.style.maxHeight=cfg.max;
@@ -1003,184 +1025,192 @@ const zSeries=m=>ZONES.map(z=>({nm:z.nm,tok:z.tok,dash:z.dash,zone:z.id,d:()=>z[
 const devOf=()=>DEV.filter(d=>ZSEL.has(d.zone)&&TSEL.has(d.ty.id));
 const zoneSet=()=>'['+[...ZSEL].map(z=>'"'+z+'"').join(', ')+']';
 const Q={
- temp:'from(bucket: "iot")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == "node" and r._field == "cpu_temp")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: "mean")',
- req:'from(bucket: "iot")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == "node" and r._field == "req_rate")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> aggregateWindow(every: 1h, fn: mean)\n  |> pivot(rowKey: ["_time"], columnKey: ["cluster"], valueColumn: "_value")',
- kw:'from(bucket: "iot")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == "rack_power" and r._field == "kw")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)\n  |> group(columns: ["cluster"])',
- msg:'sum by (topic) (rate(emqx_messages_received_total{topic=~"iot/.+"}[1m]))',
- lat:'histogram_quantile(0.95, sum by (le) (rate(influx_write_duration_seconds_bucket[5m]))) * 1000',
- host:'from(bucket: "iot")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == "node_state")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> last()\n  |> pivot(rowKey: ["instance"], columnKey: ["_field"], valueColumn: "_value")',
- logs:'{job="iot-platform", env="prod"} |= "" | pattern `<_> <level> <msg>` | level =~ "${level}"',
- mem:'max by (cluster) ((1 - node_memory_MemAvailable_bytes{cluster=~"${cluster:regex}"} / node_memory_MemTotal_bytes) * 100)',
- disk:'min by (instance) (node_filesystem_avail_bytes{cluster=~"${cluster:regex}", mountpoint="/data"} / node_filesystem_size_bytes * 100)',
- cpu:'100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle", cluster=~"${cluster:regex}"}[1m]) * 100)',
- slo:'1 - (sum(increase(influx_write_failed_total[30d])) / sum(increase(influx_write_total[30d])))',
- rules:'ALERTS{job="iot-platform"}  # nguồn: Grafana unified alerting / Alertmanager'
+ util:'from(bucket: "net")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == "interface" and r._field == "utilization")\n  |> filter(fn: (r) => contains(value: r.layer, set: ${layer:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: "mean")',
+ bw:'from(bucket: "net")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == "interface" and r._field == "throughput_gbps")\n  |> filter(fn: (r) => contains(value: r.layer, set: ${layer:json}))\n  |> aggregateWindow(every: 1h, fn: mean)\n  |> pivot(rowKey: ["_time"], columnKey: ["layer"], valueColumn: "_value")',
+ kw:'from(bucket: "net")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == "device_power" and r._field == "kw")\n  |> filter(fn: (r) => contains(value: r.layer, set: ${layer:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)\n  |> group(columns: ["layer"])',
+ msg:'sum by (source) (rate(telemetry_messages_received_total{source=~"gnmi|snmp|netflow|syslog"}[1m]))',
+ lat:'histogram_quantile(0.95, sum by (le) (rate(probe_icmp_duration_seconds_bucket[5m]))) * 1000',
+ dev:'from(bucket: "net")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == "device_state")\n  |> filter(fn: (r) => contains(value: r.layer, set: ${layer:json}))\n  |> last()\n  |> pivot(rowKey: ["device"], columnKey: ["_field"], valueColumn: "_value")',
+ logs:'{job="syslog", env="prod"} |= "" | pattern `<_> <level> <msg>` | level =~ "${level}"',
+ err:'sum by (device) (rate(ifInErrors{layer=~"${layer:regex}"}[5m]) + rate(ifOutErrors{layer=~"${layer:regex}"}[5m]))',
+ tcam:'min by (device) (tcam_free_ratio{layer=~"${layer:regex}"} * 100)',
+ rtt:'histogram_quantile(0.95, sum by (le, device) (rate(probe_icmp_duration_seconds_bucket[5m]))) * 1000',
+ bgp:'count(bgp_session_state{state="established"})',
+ drops:'sum(rate(ifOutDiscards{layer=~"${layer:regex}"}[1m]))',
+ wlat:'histogram_quantile(0.95, sum by (le) (rate(influx_write_duration_seconds_bucket[5m]))) * 1000',
+ slo:'1 - (sum(increase(probe_failed_total[30d])) / sum(increase(probe_total[30d])))',
+ rules:'ALERTS{job="network-noc"}  # nguồn: Grafana unified alerting / Alertmanager'
 };
 
 /* ===================== 11. ĐẶC TẢ DASHBOARD ===================== */
-const TABS=[{id:'ov',nm:'Tổng quan'},{id:'dev',nm:'Máy chủ'},{id:'en',nm:'Điện năng DC'},
-  {id:'inf',nm:'Hạ tầng dữ liệu'},{id:'ops',nm:'Vận hành & SLO'}];
+const TABS=[{id:'ov',nm:'Tổng quan'},{id:'dev',nm:'Thiết bị mạng'},{id:'en',nm:'Điện & PoE'},
+  {id:'inf',nm:'Hạ tầng telemetry'},{id:'ops',nm:'Vận hành & SLO'}];
 const SPEC={
 ov:[
- {row:'Sức khoẻ hệ thống',panels:[
-  {w:4,t:'Máy chủ online',k:'stat',ds:'prom',q:'count(up{job="iot-node"} == 1)',
-   d:'Số máy chủ còn trả lời scrape trong 10 phút gần nhất, trên tổng 50 host đã khai báo trong inventory.',
-   c:{nm:'host',calc:()=>{const on=DEV.filter(d=>d.st!=='off').length;
-     return{v:String(on),u:'/50',d:(50-on)+' host mất scrape · <i class="'+(on>=48?'up':'down')+'">'+Math.round(on/50*100)+'%</i>',
-     tok:on>=48?'--ok':'--warn',spark:G.conns};}}},
-  {w:4,t:'Thông lượng MQTT',k:'stat',ds:'prom',q:Q.msg,
-   d:'Tổng tốc độ bản tin broker nhận được, cộng trên 4 nhóm topic.',
-   c:{nm:'msg/s',calc:()=>{const m=totMsg(),p=totMsg(N-13),dl=(m-p)/p*100;
-     return{v:fx(m/1000,2),u:'k msg/s',d:'4 nhóm topic · <i class="'+(dl>=0?'up':'down')+'">'+(dl>=0?'▲ ':'▼ ')+fx(Math.abs(dl))+'%</i>',
-     tok:'--s2',spark:TOPICS[0].s};}}},
-  {w:4,t:'Ghi TSDB (p95)',k:'stat',ds:'prom',q:Q.lat,
-   d:'Độ trễ ghi InfluxDB phân vị 95 ở cụm C3. SLO nội bộ: dưới 100 ms.',
+ {row:'Sức khoẻ hệ thống mạng',panels:[
+  {w:4,t:'Thiết bị online',k:'stat',ds:'prom',q:'count(up{job="snmp-devices"} == 1)',
+   d:'Số thiết bị còn phản hồi poll SNMP / stream gNMI trong 10 phút gần nhất, trên tổng 50 thiết bị trong inventory.',
+   c:{nm:'thiết bị',calc:()=>{const on=DEV.filter(d=>d.st!=='off').length;
+     return{v:String(on),u:'/50',d:(50-on)+' thiết bị mất liên lạc · <i class="'+(on>=48?'up':'down')+'">'+Math.round(on/50*100)+'%</i>',
+     tok:on>=48?'--ok':'--warn',spark:G.bgp};}}},
+  {w:4,t:'Băng thông backbone',k:'stat',ds:'tsdb',q:Q.bw,
+   d:'Tổng lưu lượng in+out của uplink bốn tầng mạng tại thời điểm hiện tại.',
+   c:{nm:'Gbps',calc:()=>{const b=totBw(),p=totBw(N-13),dl=(b-p)/p*100;
+     return{v:fx(b,1),u:'Gbps',d:'4 tầng · <i class="'+(dl>=0?'up':'down')+'">'+(dl>=0?'▲ ':'▼ ')+fx(Math.abs(dl))+'%</i>',
+     tok:'--s2',spark:ZONES[0].bwS};}}},
+  {w:4,t:'RTT backbone (p95)',k:'stat',ds:'prom',q:Q.lat,
+   d:'Độ trễ vòng của phép thăm dò ICMP giữa các site, phân vị 95. SLO nội bộ: dưới 100 ms.',
    c:{nm:'p95',calc:()=>{const v=G.lat95.last();
      return{v:String(Math.round(v)),u:'ms',d:'SLO &lt; 100 ms · <i class="'+(v>100?'down':'flat')+'">'+(v>100?'vi phạm':'đạt')+'</i>',
      tok:v>100?'--crit':v>60?'--warn':'--s3',spark:G.lat95};}}},
-  {w:4,t:'Bản tin bị rớt',k:'stat',ds:'prom',q:'avg_over_time(ingest_dropped_ratio[10m]) * 100',
-   d:'Tỉ lệ bản tin bị loại ở tầng ingest (buffer đầy, sai schema hoặc hết hạn retry).',
-   c:{nm:'drop',calc:()=>{const v=G.loss.last();
+  {w:4,t:'Packet loss',k:'stat',ds:'prom',q:'avg_over_time(probe_loss_ratio[10m]) * 100',
+   d:'Tỉ lệ gói mất của phép thăm dò giữa các site, cửa sổ 10 phút.',
+   c:{nm:'loss',calc:()=>{const v=G.loss.last();
      return{v:fx(v,2),u:'%',d:'ngưỡng 2.5% · <i class="'+(v>2.5?'down':'up')+'">'+(v>2.5?'vượt ngưỡng':'bình thường')+'</i>',
      tok:v>2.5?'--crit':'--s3',spark:G.loss};}}},
-  {w:4,t:'Điện năng tức thời',k:'stat',ds:'tsdb',q:Q.kw,
-   d:'Tổng công suất PDU của 4 cụm rack tại thời điểm hiện tại.',
-   c:{nm:'kW',calc:()=>({v:grp(totKw()),u:'kW',d:'4 cụm rack · PF '+fx(G.pf.last(),3),tok:'--s1',spark:ZONES[0].kwS})}},
+  {w:4,t:'Công suất thiết bị mạng',k:'stat',ds:'tsdb',q:Q.kw,
+   d:'Tổng công suất của thiết bị mạng bốn tầng, đã gồm phần PoE cấp cho AP và camera.',
+   c:{nm:'kW',calc:()=>({v:fx(totKw(),1),u:'kW',d:'4 tầng · PF '+fx(G.pf.last(),3),tok:'--s1',spark:ZONES[2].kwS})}},
   {w:4,t:'Cảnh báo đang mở',k:'stat',ds:'prom',q:Q.rules,
    d:'Số alert instance đang ở trạng thái pending hoặc firing.',
    c:{nm:'alerts',calc:()=>{const L=[...ALERTS.values()];
      const cr=L.filter(a=>a.sev==='crit').length,se=L.filter(a=>a.sev==='serious').length;
      return{v:String(L.length),d:'<i class="down">'+cr+' critical</i> · '+se+' major · '+(L.length-cr-se)+' warning',
-     tok:cr?'--crit':L.length?'--warn':'--ok',spark:ZONES[2].tempS};}}}]},
- {row:'Tài nguyên cụm máy chủ',panels:[
-  {w:16,t:'Nhiệt độ CPU theo cụm',s:'°C · mean(5s) · ngưỡng 78 °C',k:'ts',ds:'tsdb',q:Q.temp,
-   d:'Nhiệt độ CPU trung bình từng cụm. Dải đỏ là vùng vượt ngưỡng rule NodeTempHigh; cờ dưới trục là annotation mỗi lần alert chuyển trạng thái.',
-   c:{series:zSeries('temp'),unit:' °C',ann:true,h:'lg',thresholds:[{v:78,sev:'crit'}]}},
-  {w:8,t:'Tài nguyên theo cụm',s:'giá trị hiện tại',k:'gauges',ds:'prom',q:Q.mem,
-   d:'Gauge tổng hợp trên các cụm đang chọn ở biến $cluster.',
+     tok:cr?'--crit':L.length?'--warn':'--ok',spark:ZONES[3].utilS};}}}]},
+ {row:'Lưu lượng & chất lượng đường truyền',panels:[
+  {w:16,t:'Mức dùng uplink theo tầng',s:'% · mean(5s) · ngưỡng 85%',k:'ts',ds:'tsdb',q:Q.util,
+   d:'Mức sử dụng uplink từng tầng. Dải đỏ là vùng vượt ngưỡng rule LinkSaturation; cờ dưới trục là annotation mỗi lần alert chuyển trạng thái.',
+   c:{series:zSeries('util'),unit:' %',ann:true,h:'lg',thresholds:[{v:85,sev:'crit'}]}},
+  {w:8,t:'Chất lượng tầng mạng',s:'giá trị hiện tại',k:'gauges',ds:'prom',q:Q.err,
+   d:'Gauge tổng hợp trên các tầng đang chọn ở biến $layer.',
    c:{cols:4,items:[
-    {nm:'Nhiệt CPU TB',get:()=>{const L=ZONES.filter(z=>ZSEL.has(z.id));return L.length?L.reduce((s,z)=>s+z.tempS.last(),0)/L.length:0;},min:20,max:100,unit:'°C',dec:1,th:[70,78]},
-    {nm:'RAM đã dùng',get:()=>{const L=ZONES.filter(z=>ZSEL.has(z.id));return L.length?L.reduce((s,z)=>s+z.memS.last(),0)/L.length:0;},min:0,max:100,unit:'%',dec:0,th:[85,92]},
-    {nm:'Tải cao nhất',get:()=>Math.max(0,...ZONES.filter(z=>ZSEL.has(z.id)).map(z=>z.reqS.last())),min:0,max:1600,unit:'req/s',dec:0,th:[900,1150]},
-    {nm:'I/O wait đỉnh',get:()=>Math.max(0,...ZONES.filter(z=>ZSEL.has(z.id)).map(z=>z.iowS.last())),min:0,max:9,unit:'ms',dec:2,th:[4,5.2]}]}},
-  {w:12,t:'Tải xử lý theo giờ × cụm',s:'24 giờ qua · req/s',k:'heat',ds:'tsdb',q:Q.req,
-   d:'Heatmap một sắc: càng đậm càng nhiều request. Dùng để thấy khung giờ nào cụm nào chịu tải đỉnh.',
-   c:{rows:ZONES.map(z=>z.nm),cols:()=>HRS.map(h=>String(h).padStart(2,'0')+'h'),
-      get:(r,c)=>HEAT[r][c],hue:'--s7',unit:' req/s',dec:0,pl:108}},
-  {w:12,t:'Trạng thái máy chủ theo thời gian',s:'state timeline · 12 host',k:'timeline',ds:'tsdb',q:Q.host,
-   d:'Mỗi hàng là một host, mỗi dải màu là một quãng trạng thái liên tục.',
-   c:{list:()=>devOf().slice(0,12)}}]},
- {row:'Sơ đồ rack & cảnh báo',panels:[
-  {w:10,t:'Sơ đồ rack trung tâm dữ liệu',s:'50 máy chủ · màu theo trạng thái',k:'plan',ds:'tsdb',q:Q.host,
-   d:'Vị trí máy chủ trong 4 cụm rack. Host mờ là host bị loại bởi bộ lọc $cluster / $role hiện tại.'},
-  {w:7,t:'Cảnh báo đang mở',s:'Grafana unified alerting',k:'alerts',ds:'prom',q:Q.rules,
-   d:'pending = đã chạm ngưỡng nhưng chưa đủ thời gian "for"; firing = đã đủ và đã gửi thông báo.'},
-  {w:7,t:'Log hệ thống',s:'live tail',k:'logs',ds:'logs',q:Q.logs,c:{max:'244px'},
-   d:'Log hợp nhất từ broker, ingest và node exporter; lọc theo mức ngay trên panel.'}]}],
-dev:[
- {row:'Danh sách máy chủ',panels:[
-  {w:24,t:'Máy chủ',s:'bấm tiêu đề cột để sắp xếp · lọc theo trạng thái và hostname',k:'devtable',ds:'tsdb',q:Q.host,
-   d:'Bảng hợp nhất trạng thái mới nhất của 50 host: vai trò, rack, uplink, phiên bản agent, RTT nội bộ, đĩa trống và lần scrape cuối.'}]},
- {row:'Phân bố & tài nguyên',panels:[
-  {w:8,t:'Đĩa trống thấp nhất',s:'% dung lượng /data',k:'bars',ds:'prom',q:Q.disk,
-   d:'10 host còn ít dung lượng nhất. Dưới 15% sẽ kích rule DiskSpaceLow.',
-   c:{unit:'%',rows:()=>devOf().filter(d=>d.st!=='off').sort((a,b)=>a.dfree-b.dfree).slice(0,10)
-     .map(d=>({nm:d.id,v:d.dfree,max:100,tok:d.dfree<15?'--crit':d.dfree<30?'--warn':d.dfree<55?'--serious':'--ok'}))}},
-  {w:8,t:'Phân bố RTT nội bộ',s:'host → broker · ms',k:'hist',ds:'prom',q:'histogram_quantile(0.95, rate(node_network_rtt_seconds_bucket[5m])) * 1000',
-   d:'RTT từ host tới broker. Trên 8 ms thường là nghẽn uplink hoặc switch ToR quá tải.',
-   c:{tok:'--s2',bins:()=>[[0,1],[1,2],[2,4],[4,8],[8,12],[12,16]]
-     .map(b=>({lbl:b[0]+'…'+b[1]+' ms',n:devOf().filter(d=>d.rtt>=b[0]&&d.rtt<b[1]).length,
-       tok:b[0]>=8?'--crit':b[0]>=4?'--warn':'--s2'}))}},
-  {w:8,t:'Cơ cấu theo vai trò',s:'host đang hiển thị',k:'donut',ds:'tsdb',q:Q.host,
-   d:'Tỉ lệ host theo vai trò sau khi áp bộ lọc.',
-   c:{items:()=>TYPES.map((t,i)=>({nm:t.nm,v:devOf().filter(d=>d.ty.id===t.id).length,tok:'--s'+(i+1)})),
-      center:()=>({v:String(devOf().length),lbl:'host'})}}]},
- {row:'Agent & trạng thái',panels:[
-  {w:8,t:'Tiến độ rollout agent',s:'mục tiêu 3.1.2',k:'bars',ds:'prom',q:'count by (version) (iot_agent_build_info)',
-   d:'Số host theo phiên bản agent thu thập. Rollout 3.1.2 đang chạy lần lượt theo từng cụm.',
-   c:{unit:' host',rows:()=>AGV.map(v=>({nm:'agent '+v,v:devOf().filter(d=>d.agv===v).length,max:Math.max(1,devOf().length),
-     tok:v==='3.1.2'?'--ok':v==='3.0.4'?'--warn':'--crit'}))}},
-  {w:16,t:'State timeline 20 máy chủ',s:'up / warning / critical / down',k:'timeline',ds:'tsdb',q:Q.host,
-   d:'Dùng để phân biệt sự cố đồng thời nhiều host (mất rack, mất switch) với lỗi lẻ của một host.',
-   c:{list:()=>devOf().slice(0,20),h:'lg'}}]}],
-en:[
- {row:'Tiêu thụ điện',panels:[
-  {w:16,t:'Công suất theo cụm rack',s:'kW · stacked',k:'ts',ds:'tsdb',q:Q.kw,
-   d:'Vùng xếp lớp: chiều cao tổng là công suất toàn phòng máy, tooltip có cả tổng.',
-   c:{series:zSeries('kw'),unit:' kW',stack:true,h:'lg',dec:0}},
-  {w:4,t:'Điện năng 24h',k:'stat',ds:'tsdb',q:Q.kw,
-   d:'Tích phân công suất PDU theo giờ trong 24 giờ qua.',
-   c:{nm:'kWh',calc:()=>({v:grp(ENH.reduce((s,v)=>s+v,0)),u:'kWh',
-     d:'trung bình '+grp(ENH.reduce((s,v)=>s+v,0)/24)+' kW/h',tok:'--s1',spark:ZONES[0].kwS})}},
-  {w:4,t:'Chi phí ước tính',k:'stat',ds:'tsdb',q:Q.kw,
-   d:'Đơn giá bình quân 2.600 ₫/kWh, chưa tính giá giờ cao điểm.',
-   c:{nm:'VND',calc:()=>{const kwh=ENH.reduce((s,v)=>s+v,0);
-     return{v:fx(kwh*2600/1e6,1),u:'triệu ₫',d:'đơn giá 2.600 ₫/kWh · 24h',tok:'--s5',spark:ZONES[1].kwS};}}}]},
- {row:'Phân tích phụ tải',panels:[
-  {w:12,t:'Điện năng theo giờ',s:'kWh · 24 giờ qua',k:'vbars',ds:'tsdb',q:Q.kw,
-   d:'Cột cam/đỏ là các giờ vượt 400/470 kWh — thường trùng khung giờ tải đỉnh của ingest.',
-   c:{nm:'kWh',items:()=>ENH.map((v,i)=>({lbl:String(HRS[i]).padStart(2,'0')+'h',v,
-     tok:v>470?'--s6':v>400?'--s1':'--s2'}))}},
-  {w:6,t:'Tỉ trọng theo cụm',s:'công suất hiện tại',k:'donut',ds:'tsdb',q:Q.kw,
-   d:'Cụm ingest C1 thường chiếm trên 35% tổng tải điện.',
-   c:{items:()=>ZONES.map(z=>({nm:z.nm,v:z.kwS.last(),tok:z.tok})),center:()=>({v:grp(totKw()),lbl:'kW'})}},
-  {w:6,t:'Chất lượng điện & PUE',s:'hiện tại',k:'gauges',ds:'tsdb',q:'from(bucket:"iot") |> range(start:-5m) |> filter(fn:(r)=>r._field=="pf") |> last()',
-   d:'PF dưới 92% bị tính phí phản kháng. PUE là tổng điện phòng máy chia cho điện tải IT.',
-   c:{cols:3,items:[
-    {nm:'Hệ số công suất',get:()=>G.pf.last()*100,min:70,max:100,unit:'%',dec:1,th:[101,102]},
-    {nm:'PUE',get:()=>1.24+(1-G.pf.last())*2.2,min:1,max:2,unit:'ratio',dec:2,th:[1.5,1.7]},
-    {nm:'Tải / định mức',get:()=>totKw()/650*100,min:0,max:120,unit:'%',dec:0,th:[80,95]}]}}]},
- {row:'Chi tiết',panels:[
-  {w:12,t:'Phụ tải theo cụm',k:'table',ds:'tsdb',q:Q.kw,
-   d:'kWh 24h được ước lượng từ công suất trung bình của cửa sổ hiện tại.',
-   c:{cols:['Cụm','kW hiện tại','kWh 24h','Tỉ trọng'],right:[1,2,3],
-      rows:()=>{const tot=totKw()||1;return ZONES.map(z=>[z.nm,fx(z.kwS.last(),1),grp(z.kwS.avg(N)*24),fx(z.kwS.last()/tot*100,1)+'%']);}}},
-  {w:12,t:'Hệ số công suất (PF)',s:'mục tiêu ≥ 0.92',k:'ts',ds:'tsdb',q:'from(bucket:"iot") |> range(start: v.timeRangeStart) |> filter(fn:(r)=>r._field=="pf") |> aggregateWindow(every: v.windowPeriod, fn: mean)',
-   d:'PF tổng tại tủ phân phối của phòng máy.',
-   c:{series:[{nm:'PF tổng',tok:'--s5',dash:[],d:()=>G.pf.d}],dec:3,h:'sm',thin:true}}]}],
-inf:[
- {row:'Ingest & độ trễ',panels:[
-  {w:12,t:'Bản tin MQTT theo topic',s:'msg/s · stacked',k:'ts',ds:'prom',q:Q.msg,
-   d:'Tách theo nhóm topic để thấy đợt OTA hay lệnh điều khiển làm tăng tải ingest.',
-   c:{series:TOPICS.map(t=>({nm:t.nm,tok:t.tok,dash:t.dash,d:()=>t.s.d})),unit:' msg/s',stack:true,dec:0}},
-  {w:12,t:'Độ trễ ghi InfluxDB',s:'ms · p50 / p95 / p99',k:'ts',ds:'prom',q:Q.lat,
+    {nm:'Uplink TB',get:()=>{const L=ZONES.filter(z=>ZSEL.has(z.id));return L.length?L.reduce((s,z)=>s+z.utilS.last(),0)/L.length:0;},min:0,max:100,unit:'%',dec:1,th:[75,85]},
+    {nm:'Băng thông tổng',get:()=>ZONES.filter(z=>ZSEL.has(z.id)).reduce((s,z)=>s+z.bwS.last(),0),min:0,max:200,unit:'Gbps',dec:1,th:[150,180]},
+    {nm:'Lỗi CRC đỉnh',get:()=>Math.max(0,...ZONES.filter(z=>ZSEL.has(z.id)).map(z=>z.errS.last())),min:0,max:12,unit:'lỗi/s',dec:2,th:[3,5]},
+    {nm:'Nhiệt thiết bị',get:()=>Math.max(0,...ZONES.filter(z=>ZSEL.has(z.id)).map(z=>z.tempS.last())),min:20,max:90,unit:'°C',dec:1,th:[60,68]}]}},
+  {w:12,t:'RTT giữa các site',s:'ms · p50 / p95 / p99',k:'ts',ds:'prom',q:Q.lat,
    d:'Ba phân vị trên cùng một trục vì cùng đơn vị. Đường gạch là SLO 100 ms.',
    c:{series:[{nm:'p50',tok:'--s3',dash:[],d:()=>G.lat50.d},{nm:'p95',tok:'--s1',dash:[7,4],d:()=>G.lat95.d},
       {nm:'p99',tok:'--s6',dash:[2,4],d:()=>G.lat99.d}],unit:' ms',dec:0,zero:true,
-      thresholds:[{v:100,sev:'warn'}],ann:true}}]},
+      thresholds:[{v:100,sev:'warn'}],ann:true}},
+  {w:12,t:'Băng thông theo giờ × tầng',s:'24 giờ qua · Gbps',k:'heat',ds:'tsdb',q:Q.bw,
+   d:'Heatmap một sắc: càng đậm càng nhiều lưu lượng. Dùng để thấy khung giờ cao điểm của từng tầng.',
+   c:{rows:ZONES.map(z=>z.nm),cols:()=>HRS.map(h=>String(h).padStart(2,'0')+'h'),
+      get:(r,c)=>HEAT[r][c],hue:'--s7',unit:' Gbps',dec:1,pl:124}},
+  {w:24,t:'Trạng thái thiết bị theo thời gian',s:'state timeline · 12 thiết bị',k:'timeline',ds:'tsdb',q:Q.dev,
+   d:'Mỗi hàng là một thiết bị, mỗi dải màu là một quãng trạng thái liên tục.',
+   c:{list:()=>devOf().slice(0,12)}}]},
+ {row:'Topology & cảnh báo',panels:[
+  {w:10,t:'Sơ đồ topology',s:'50 thiết bị · màu theo trạng thái',k:'plan',ds:'tsdb',q:Q.dev,
+   d:'Vị trí thiết bị trong bốn tầng mạng. Thiết bị mờ là thiết bị bị loại bởi bộ lọc $layer / $device hiện tại.'},
+  {w:7,t:'Cảnh báo đang mở',s:'Grafana unified alerting',k:'alerts',ds:'prom',q:Q.rules,
+   d:'pending = đã chạm ngưỡng nhưng chưa đủ thời gian "for"; firing = đã đủ và đã gửi thông báo.'},
+  {w:7,t:'Syslog thiết bị',s:'live tail',k:'logs',ds:'logs',q:Q.logs,c:{max:'244px'},
+   d:'Syslog hợp nhất từ switch, router và firewall; lọc theo mức ngay trên panel.'}]}],
+dev:[
+ {row:'Danh sách thiết bị',panels:[
+  {w:24,t:'Thiết bị mạng',s:'bấm tiêu đề cột để sắp xếp · lọc theo trạng thái và tên thiết bị',k:'devtable',ds:'tsdb',q:Q.dev,
+   d:'Bảng hợp nhất trạng thái mới nhất của 50 thiết bị: loại, vị trí, tốc độ uplink, firmware, RTT quản trị, TCAM còn trống và lần poll cuối.'}]},
  {row:'Phân bố & tài nguyên',panels:[
+  {w:8,t:'TCAM còn trống thấp nhất',s:'% bảng TCAM/ACL',k:'bars',ds:'prom',q:Q.tcam,
+   d:'10 thiết bị còn ít TCAM nhất. Dưới 15% sẽ kích rule TCAMExhaustion — nguy cơ không nạp được ACL mới.',
+   c:{unit:'%',rows:()=>devOf().filter(d=>d.st!=='off').sort((a,b)=>a.tcam-b.tcam).slice(0,10)
+     .map(d=>({nm:d.id,v:d.tcam,max:100,tok:d.tcam<15?'--crit':d.tcam<30?'--warn':d.tcam<55?'--serious':'--ok'}))}},
+  {w:8,t:'Phân bố RTT quản trị',s:'NMS → thiết bị · ms',k:'hist',ds:'prom',q:Q.rtt,
+   d:'RTT từ hệ thống giám sát tới thiết bị. Trên 8 ms thường là tuyến xa hoặc đường truyền đang nghẽn.',
+   c:{tok:'--s2',bins:()=>[[0,1],[1,2],[2,4],[4,8],[8,12],[12,16]]
+     .map(b=>({lbl:b[0]+'…'+b[1]+' ms',n:devOf().filter(d=>d.rtt>=b[0]&&d.rtt<b[1]).length,
+       tok:b[0]>=8?'--crit':b[0]>=4?'--warn':'--s2'}))}},
+  {w:8,t:'Cơ cấu theo loại thiết bị',s:'thiết bị đang hiển thị',k:'donut',ds:'tsdb',q:Q.dev,
+   d:'Tỉ lệ thiết bị theo loại sau khi áp bộ lọc.',
+   c:{items:()=>TYPES.map((t,i)=>({nm:t.nm,v:devOf().filter(d=>d.ty.id===t.id).length,tok:'--s'+(i+1)})),
+      center:()=>({v:String(devOf().length),lbl:'thiết bị'})}}]},
+ {row:'Firmware & trạng thái',panels:[
+  {w:8,t:'Tiến độ nâng firmware',s:'mục tiêu 10.4(3)',k:'bars',ds:'prom',q:'count by (version) (device_firmware_info)',
+   d:'Số thiết bị theo phiên bản firmware. Đợt nâng 10.4(3) đang chạy lần lượt theo từng tầng.',
+   c:{unit:' thiết bị',rows:()=>FWV.map(v=>({nm:'fw '+v,v:devOf().filter(d=>d.fwv===v).length,max:Math.max(1,devOf().length),
+     tok:v==='10.4(3)'?'--ok':v==='10.2(5)'?'--warn':'--crit'}))}},
+  {w:16,t:'State timeline 20 thiết bị',s:'up / warning / critical / unreachable',k:'timeline',ds:'tsdb',q:Q.dev,
+   d:'Dùng để phân biệt sự cố đồng thời nhiều thiết bị (mất nguồn, mất uplink) với lỗi lẻ của một port.',
+   c:{list:()=>devOf().slice(0,20),h:'lg'}}]}],
+en:[
+ {row:'Tiêu thụ điện',panels:[
+  {w:16,t:'Công suất theo tầng',s:'kW · stacked',k:'ts',ds:'tsdb',q:Q.kw,
+   d:'Vùng xếp lớp: chiều cao tổng là công suất toàn bộ thiết bị mạng, tooltip có cả tổng.',
+   c:{series:zSeries('kw'),unit:' kW',stack:true,h:'lg',dec:1}},
+  {w:4,t:'Điện năng 24h',k:'stat',ds:'tsdb',q:Q.kw,
+   d:'Tích phân công suất theo giờ trong 24 giờ qua.',
+   c:{nm:'kWh',calc:()=>({v:grp(ENH.reduce((s,v)=>s+v,0)),u:'kWh',
+     d:'trung bình '+fx(ENH.reduce((s,v)=>s+v,0)/24,1)+' kW/h',tok:'--s1',spark:ZONES[2].kwS})}},
+  {w:4,t:'Chi phí ước tính',k:'stat',ds:'tsdb',q:Q.kw,
+   d:'Đơn giá bình quân 2.600 ₫/kWh, chưa tính giá giờ cao điểm.',
+   c:{nm:'VND',calc:()=>{const kwh=ENH.reduce((s,v)=>s+v,0);
+     return{v:fx(kwh*2600/1e6,2),u:'triệu ₫',d:'đơn giá 2.600 ₫/kWh · 24h',tok:'--s5',spark:ZONES[0].kwS};}}}]},
+ {row:'Phân tích phụ tải',panels:[
+  {w:12,t:'Điện năng theo giờ',s:'kWh · 24 giờ qua',k:'vbars',ds:'tsdb',q:Q.kw,
+   d:'Cột cam/đỏ là các giờ vượt 46/52 kWh — thường trùng giờ hành chính khi PoE cấp tối đa.',
+   c:{nm:'kWh',items:()=>ENH.map((v,i)=>({lbl:String(HRS[i]).padStart(2,'0')+'h',v,
+     tok:v>52?'--s6':v>46?'--s1':'--s2'}))}},
+  {w:6,t:'Tỉ trọng theo tầng',s:'công suất hiện tại',k:'donut',ds:'tsdb',q:Q.kw,
+   d:'Tầng truy nhập chiếm phần lớn vì PoE cấp nguồn cho AP, camera và điện thoại IP.',
+   c:{items:()=>ZONES.map(z=>({nm:z.nm,v:z.kwS.last(),tok:z.tok})),center:()=>({v:fx(totKw(),1),lbl:'kW'})}},
+  {w:6,t:'Chất lượng điện & PUE',s:'hiện tại',k:'gauges',ds:'tsdb',q:'from(bucket:"net") |> range(start:-5m) |> filter(fn:(r)=>r._field=="pf") |> last()',
+   d:'PF dưới 92% bị tính phí phản kháng. PUE là tổng điện phòng máy chia cho điện tải thiết bị.',
+   c:{cols:3,items:[
+    {nm:'Hệ số công suất',get:()=>G.pf.last()*100,min:70,max:100,unit:'%',dec:1,th:[101,102]},
+    {nm:'PUE',get:()=>1.24+(1-G.pf.last())*2.2,min:1,max:2,unit:'ratio',dec:2,th:[1.5,1.7]},
+    {nm:'Tải / định mức',get:()=>totKw()/80*100,min:0,max:120,unit:'%',dec:0,th:[80,95]}]}}]},
+ {row:'Chi tiết',panels:[
+  {w:12,t:'Phụ tải theo tầng',k:'table',ds:'tsdb',q:Q.kw,
+   d:'kWh 24h được ước lượng từ công suất trung bình của cửa sổ hiện tại.',
+   c:{cols:['Tầng','kW hiện tại','kWh 24h','Tỉ trọng'],right:[1,2,3],
+      rows:()=>{const tot=totKw()||1;return ZONES.map(z=>[z.nm,fx(z.kwS.last(),1),grp(z.kwS.avg(N)*24),fx(z.kwS.last()/tot*100,1)+'%']);}}},
+  {w:12,t:'Hệ số công suất (PF)',s:'mục tiêu ≥ 0.92',k:'ts',ds:'tsdb',q:'from(bucket:"net") |> range(start: v.timeRangeStart) |> filter(fn:(r)=>r._field=="pf") |> aggregateWindow(every: v.windowPeriod, fn: mean)',
+   d:'PF tổng tại tủ phân phối của phòng thiết bị.',
+   c:{series:[{nm:'PF tổng',tok:'--s5',dash:[],d:()=>G.pf.d}],dec:3,h:'sm',thin:true}}]}],
+inf:[
+ {row:'Thu thập & độ trễ',panels:[
+  {w:12,t:'Bản tin telemetry theo nguồn',s:'msg/s · stacked',k:'ts',ds:'prom',q:Q.msg,
+   d:'Tách theo nguồn thu thập để thấy đợt NetFlow hay syslog dồn dập làm tăng tải pipeline.',
+   c:{series:TOPICS.map(t=>({nm:t.nm,tok:t.tok,dash:t.dash,d:()=>t.s.d})),unit:' msg/s',stack:true,dec:0}},
+  {w:12,t:'Độ trễ ghi InfluxDB',s:'ms · p50 / p95 / p99',k:'ts',ds:'prom',q:Q.wlat,
+   d:'Độ trễ ghi của pipeline telemetry. Đường gạch là ngưỡng cảnh báo 100 ms.',
+   c:{series:[{nm:'p50',tok:'--s3',dash:[],d:()=>G.wlat50.d},{nm:'p95',tok:'--s1',dash:[7,4],d:()=>G.wlat95.d},
+      {nm:'p99',tok:'--s6',dash:[2,4],d:()=>G.wlat99.d}],unit:' ms',dec:0,zero:true,
+      thresholds:[{v:100,sev:'warn'}]}}]},
+ {row:'Phân bố & hàng đợi',panels:[
   {w:12,t:'Phân bố độ trễ ghi',s:'số bản tin theo nhóm · 24 phút',k:'heat',ds:'prom',
    q:'sum by (le) (rate(influx_write_duration_seconds_bucket[1m]))',
    d:'Histogram theo thời gian: hàng dưới nặng màu là đuôi trễ đang dày lên.',
    c:{rows:LATB,cols:()=>{const now=Date.now();return Array.from({length:24},(_,i)=>hh(now-(23-i)*60000));},
       get:(r,c)=>LATH[c][r],hue:'--s1',unit:' msg',dec:0,pl:66}},
-  {w:6,t:'Kết nối broker',k:'stat',ds:'prom',q:'emqx_connections_count{node=~"emqx@10.8.2.*"}',
-   d:'Số client MQTT đang kết nối vào cụm C2. Dưới 45 sẽ ảnh hưởng SLO khả dụng.',
-   c:{nm:'conn',calc:()=>({v:String(Math.round(G.conns.last())),u:'client',
-     d:'EMQX 5.9 · QoS 1 · TLS 1.3 · '+grp(totMsg())+' msg/s',tok:'--s2',spark:G.conns})}},
-  {w:6,t:'Hàng đợi chờ ghi',k:'stat',ds:'prom',q:'emqx_queued_messages',
-   d:'Bản tin đã nhận nhưng chưa ghi xuống TSDB. Trên 600 kích rule BrokerQueueDepth.',
-   c:{nm:'queue',calc:()=>{const q=G.queue.last();
-     return{v:grp(q),u:'msg',d:'buffer 5s · '+(q>600?'<i class="down">nguy cơ nghẽn</i>':'ổn định'),
-     tok:q>600?'--crit':q>350?'--warn':'--s3',spark:G.queue};}}}]},
+  {w:6,t:'Phiên BGP established',k:'stat',ds:'prom',q:Q.bgp,
+   d:'Số phiên BGP đang established với ISP và giữa các site. Dưới 45 sẽ kích rule BGPSessionLost.',
+   c:{nm:'phiên',calc:()=>{const v=G.bgp.last();
+     return{v:String(Math.round(v)),u:'/50',d:'eBGP + iBGP · hold-time 90s',tok:v<45?'--crit':'--s2',spark:G.bgp};}}},
+  {w:6,t:'Output queue drops',k:'stat',ds:'prom',q:Q.drops,
+   d:'Gói bị huỷ ở hàng đợi ra của uplink. Trên 600 pkt/s kích rule OutputQueueDrops.',
+   c:{nm:'drops',calc:()=>{const q=G.drops.last();
+     return{v:grp(q),u:'pkt/s',d:'uplink đang nghẽn? '+(q>600?'<i class="down">có</i>':'không'),
+     tok:q>600?'--crit':q>350?'--warn':'--s3',spark:G.drops};}}}]},
  {row:'Kiến trúc & lưu trữ',panels:[
-  {w:24,t:'Kiến trúc hệ thống server IoT',s:'client → LB → broker → ingest → TSDB → Grafana · số liệu cập nhật trực tiếp',k:'flow',ds:'prom',q:Q.msg,
-   d:'Sơ đồ luồng dữ liệu kèm throughput, số kết nối và độ trễ thực tại từng chặng.'},
-  {w:12,t:'Log broker & pipeline',s:'live tail',k:'logs',ds:'logs',q:Q.logs,c:{max:'200px'},
-   d:'Gộp log EMQX, ingest worker và compaction của TSDB.'},
+  {w:24,t:'Kiến trúc thu thập telemetry',s:'thiết bị → collector → Kafka → InfluxDB → Grafana · số liệu cập nhật trực tiếp',k:'flow',ds:'prom',q:Q.msg,
+   d:'Sơ đồ luồng dữ liệu giám sát kèm throughput, số thiết bị đang stream và độ trễ thực tại từng chặng.'},
+  {w:12,t:'Log collector & pipeline',s:'live tail',k:'logs',ds:'logs',q:Q.logs,c:{max:'200px'},
+   d:'Gộp log của collector gNMI/SNMP, Kafka và quá trình ghi TSDB.'},
   {w:12,t:'Lưu trữ & retention',k:'table',ds:'prom',q:'influx_disk_bytes / influx_disk_total_bytes * 100',
-   d:'Cấu hình lưu trữ hiện hành của cụm C3.',
+   d:'Cấu hình lưu trữ hiện hành của TSDB giám sát mạng.',
    c:{cols:['Thành phần','Giá trị'],right:[1],max:'200px',rows:()=>[
     ['InfluxDB — dung lượng đã dùng',fx(G.disk.last(),1)+' %'],
     ['Retention policy','90d (raw 7d + downsample 1m)'],
-    ['Series cardinality',grp(48200+Math.round(G.conns.last()*37))],
+    ['Series cardinality',grp(48200+Math.round(G.bgp.last()*37))],
     ['Điểm ghi mỗi phút',grp(totMsg()*60)],
-    ['CPU node ingest (C1)',fx(G.cpu.last(),1)+' %'],
+    ['CPU node collector',fx(G.cpu.last(),1)+' %'],
     ['Nén trung bình','4.6×'],
     ['Backup gần nhất','hôm nay 03:15 · thành công']]}}]}],
 ops:[
  {row:'SLO & ngân sách lỗi',panels:[
-  {w:12,t:'SLO nền tảng IoT',s:'cửa sổ 30 ngày',k:'slo',ds:'prom',q:Q.slo,
+  {w:12,t:'SLO hạ tầng mạng',s:'cửa sổ 30 ngày',k:'slo',ds:'prom',q:Q.slo,
    d:'Thanh màu là phần ngân sách lỗi còn lại. Burn > 1× nghĩa là đang tiêu ngân sách nhanh hơn cho phép.',
    c:{items:SLOS}},
   {w:6,t:'MTTR trung bình',k:'stat',ds:'prom',q:'avg(incident_resolution_minutes{env="prod"})',
@@ -1195,7 +1225,7 @@ ops:[
  {row:'Alert rule & incident',panels:[
   {w:24,t:'Alert rules',s:'9 rule · Grafana unified alerting',k:'rules',ds:'prom',q:Q.rules,
    d:'Toàn bộ rule đang hoạt động kèm biểu thức, thời gian "for", label định tuyến và runbook tương ứng.'},
-  {w:14,t:'Lịch sử incident',s:'14 ngày gần nhất',k:'incidents',ds:'prom',q:'ALERTS_FOR_STATE{job="iot-platform"}',
+  {w:14,t:'Lịch sử incident',s:'14 ngày gần nhất',k:'incidents',ds:'prom',q:'ALERTS_FOR_STATE{job="network-noc"}',
    d:'Incident đóng trong phiên mô phỏng cũng được thêm vào bảng này.'},
   {w:10,t:'Kíp trực',k:'table',ds:'prom',q:'oncall_schedule{team=~".+"}',
    d:'Lịch trực và kênh liên hệ theo nhóm chịu trách nhiệm trong label của rule.',
@@ -1204,11 +1234,11 @@ ops:[
         '<span class="pill '+(r[4]==='đang trực'?'ok':'flat')+'">'+r[4]+'</span>'])}}]},
  {row:'Bảo trì & thay đổi',panels:[
   {w:14,t:'Cửa sổ bảo trì',s:'đã lên lịch / chờ duyệt',k:'table',ds:'prom',q:'maintenance_windows{env="prod"}',
-   d:'Trong các cửa sổ này, alert của cụm liên quan sẽ được silence.',
+   d:'Trong các cửa sổ này, alert của thiết bị liên quan sẽ được silence.',
    c:{cols:['Cửa sổ','Phạm vi','Trạng thái','Team'],wide:true,max:'220px',
       rows:()=>MAINT.map(r=>[r[0],r[1],'<span class="pill '+(r[2]==='đã lên lịch'?'ok':'warn')+'">'+r[2]+'</span>','<span class="lab">'+r[3]+'</span>'])}},
-  {w:10,t:'Tài nguyên node ingest',s:'CPU · disk',k:'ts',ds:'prom',q:Q.cpu,
-   d:'CPU và dung lượng đĩa của máy chủ chạy ingest worker + InfluxDB.',
+  {w:10,t:'Tài nguyên node collector',s:'CPU · disk',k:'ts',ds:'prom',q:'100 - avg(rate(node_cpu_seconds_total{mode="idle",job="collector"}[1m]) * 100)',
+   d:'CPU và dung lượng đĩa của máy chạy collector gNMI/SNMP + InfluxDB.',
    c:{series:[{nm:'CPU %',tok:'--s2',dash:[],d:()=>G.cpu.d},{nm:'Disk %',tok:'--s5',dash:[7,4],d:()=>G.disk.d}],
       unit:' %',dec:1,zero:true,h:'sm',thresholds:[{v:85,sev:'warn'}]}}]}]
 };
@@ -1270,15 +1300,15 @@ function setTab(id){activeTab=id;closeExpand();
   renderVisible();}
 function buildVars(){
   const v=document.getElementById('vars');
-  v.innerHTML='<div class="var"><span class="k">Hạ tầng</span><div class="box">iot-prod · DC1 + DC2</div></div>'+
-    '<div class="var"><span class="k">$cluster</span><div class="box" id="zchips">'+
+  v.innerHTML='<div class="var"><span class="k">Hạ tầng</span><div class="box">net-prod · 4 site</div></div>'+
+    '<div class="var"><span class="k">$layer</span><div class="box" id="zchips">'+
       ZONES.map(z=>'<button class="chip on" data-z="'+z.id+'">'+z.id+'</button>').join('')+'</div></div>'+
-    '<div class="var"><span class="k">$role</span><details class="dd"><summary class="box">'+
+    '<div class="var"><span class="k">$device</span><details class="dd"><summary class="box">'+
       '<span id="tlbl">Tất cả (6)</span> ▾</summary><div class="menu" id="tmenu" style="left:0;right:auto">'+
-      '<div class="lbl">Chọn vai trò máy chủ</div>'+TYPES.map(t=>'<button class="sel" data-t="'+t.id+'">✓ '+t.nm+'</button>').join('')+
+      '<div class="lbl">Chọn loại thiết bị</div>'+TYPES.map(t=>'<button class="sel" data-t="'+t.id+'">✓ '+t.nm+'</button>').join('')+
       '<div class="sep"></div><button data-t="__all">Chọn tất cả</button></div></details></div>'+
     '<div class="var"><span class="k">$interval</span><div class="box">5s</div></div>'+
-    '<div class="var"><span class="k">K8s</span><div class="box">iot-prod-01</div></div>'+
+    '<div class="var"><span class="k">NMS</span><div class="box">nms-hn-01</div></div>'+
     '<div class="var"><span class="k">Timezone</span><div class="box">Asia/Ho_Chi_Minh</div></div>';
   document.getElementById('zchips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;
     const z=b.dataset.z;ZSEL.has(z)?ZSEL.delete(z):ZSEL.add(z);b.classList.toggle('on',ZSEL.has(z));renderVisible();});
@@ -1289,7 +1319,7 @@ function buildVars(){
     tm.querySelectorAll('button[data-t]').forEach(x=>{if(x.dataset.t==='__all')return;
       const on=TSEL.has(x.dataset.t);x.classList.toggle('sel',on);
       x.textContent=(on?'✓ ':'   ')+TYPES.find(y=>y.id===x.dataset.t).nm;});
-    document.getElementById('tlbl').textContent=TSEL.size===TYPES.length?'Tất cả (6)':TSEL.size+' vai trò';
+    document.getElementById('tlbl').textContent=TSEL.size===TYPES.length?'Tất cả (6)':TSEL.size+' loại';
     renderVisible();});
 }
 /* ---- expand / inspect / modal ---- */
@@ -1320,13 +1350,13 @@ function dashJSON(){
     panels.push({id:++id,type:'row',title:row.row,collapsed:false,repeat:null});
     row.panels.forEach(p=>panels.push({id:++id,type:JTYPE[p.k]||'table',title:p.t,gridPos:{w:p.w,h:p.k==='stat'?4:8},
       datasource:{uid:p.ds||'tsdb'},targets:[{refId:'A',query:p.q||''}]}));}));
-  return JSON.stringify({uid:UID,title:'IoT Platform Operations — Hệ thống server IoT',version:VER,schemaVersion:39,
-    tags:['iot-platform','server','mqtt','influxdb','prod'],timezone:'Asia/Ho_Chi_Minh',editable:true,
+  return JSON.stringify({uid:UID,title:'Network Operations — Hạ tầng mạng',version:VER,schemaVersion:39,
+    tags:['network','noc','gnmi','snmp','influxdb','prod'],timezone:'Asia/Ho_Chi_Minh',editable:true,
     time:{from:'now-'+RANGES[rangeIx].lbl.replace('Last ','').replace(/\s/g,''),to:'now'},
     refresh:REFS[refIx].lbl,
     templating:{list:[
-      {name:'cluster',type:'custom',multi:true,current:{text:[...ZSEL].join(' + '),value:[...ZSEL]},options:ZONES.map(z=>({text:z.id,value:z.id}))},
-      {name:'role',type:'custom',multi:true,current:{value:[...TSEL]}},
+      {name:'layer',type:'custom',multi:true,current:{text:[...ZSEL].join(' + '),value:[...ZSEL]},options:ZONES.map(z=>({text:z.id,value:z.id}))},
+      {name:'device',type:'custom',multi:true,current:{value:[...TSEL]}},
       {name:'interval',type:'interval',current:{value:'5s'}}]},
     annotations:{list:[{name:'Alerts',datasource:{uid:'prom'},enable:true,iconColor:'red'}]},
     panels},null,2);
@@ -1335,7 +1365,7 @@ function openInspect(rec){
   closeModal();
   const d=rec.inst.data?rec.inst.data():{cols:[],rows:[]},p=rec.spec;
   const raw=p.q||'(panel này không truy vấn dữ liệu)';
-  const interp=raw.replace(/\$\{cluster:json\}/g,zoneSet()).replace(/\$\{cluster:regex\}/g,[...ZSEL].join('|'))
+  const interp=raw.replace(/\$\{layer:json\}/g,zoneSet()).replace(/\$\{layer:regex\}/g,[...ZSEL].join('|'))
     .replace(/\$\{level\}/g,logFilter==='ALL'?'.+':logFilter).replace(/v\.windowPeriod/g,'5s')
     .replace(/v\.timeRangeStart/g,'-'+RANGES[rangeIx].lbl.replace('Last ','')).replace(/v\.timeRangeStop/g,'now()');
   modal=document.createElement('div');modal.className='modal';
@@ -1353,7 +1383,7 @@ function openInspect(rec){
       '<div class="qblock"><div class="qh">Panel</div><dl class="kv">'+
       '<dt>Loại</dt><dd>'+(JTYPE[p.k]||'table')+'</dd><dt>Bề rộng</dt><dd>'+p.w+'/24</dd>'+
       '<dt>Khoảng</dt><dd>'+RANGES[rangeIx].lbl+'</dd><dt>Refresh</dt><dd>'+REFS[refIx].lbl+'</dd>'+
-      '<dt>$cluster</dt><dd>'+[...ZSEL].join(', ')+'</dd><dt>$role</dt><dd>'+TSEL.size+'/'+TYPES.length+'</dd></dl></div>'+
+      '<dt>$layer</dt><dd>'+[...ZSEL].join(', ')+'</dd><dt>$device</dt><dd>'+TSEL.size+'/'+TYPES.length+'</dd></dl></div>'+
       (p.d?'<div class="qblock"><div class="qh">Mô tả</div><pre>'+esc(p.d)+'</pre></div>':''),
     json:()=>'<div class="qblock"><pre>'+esc(panelJSON(rec))+'</pre></div>'
   };
@@ -1401,7 +1431,7 @@ function applyTheme(){
   const r=document.documentElement;
   if(themeMode==='sys')r.removeAttribute('data-theme');else r.setAttribute('data-theme',themeMode);
   document.getElementById('themeLbl').textContent=themeMode==='sys'?'Hệ thống':themeMode==='dark'?'Tối':'Sáng';
-  try{localStorage.setItem('iotTheme',themeMode);}catch(e){}
+  try{localStorage.setItem('netTheme',themeMode);}catch(e){}
   readTheme();setRefresh();renderVisible();}
 document.getElementById('btnTheme').addEventListener('click',()=>{
   themeMode=themeMode==='sys'?'dark':themeMode==='dark'?'light':'sys';applyTheme();});
@@ -1417,10 +1447,10 @@ function showHelp(){openModalHTML('Phím tắt & cách dùng',
   .map(r=>'<kbd>'+r[0]+'</kbd><span>'+r[1]+'</span>').join('')+'</div></div>'+
   '<div class="qblock"><div class="qh">Tương tác</div><pre>• Hover biểu đồ: crosshair đồng bộ trên mọi time series đang hiện\n'+
   '• Bấm legend: ẩn/hiện series\n• ⋮ trên panel: xem toàn màn hình, Inspect (data/query/JSON), copy CSV\n'+
-  '• Bấm tiêu đề row: gập/mở cả hàng panel\n• $cluster và $role lọc xuyên tất cả panel\n'+
-  '• Bấm tiêu đề cột trong bảng máy chủ để sắp xếp</pre></div>'+
+  '• Bấm tiêu đề row: gập/mở cả hàng panel\n• $layer và $device lọc xuyên tất cả panel\n'+
+  '• Bấm tiêu đề cột trong bảng thiết bị để sắp xếp</pre></div>'+
   '<div class="qblock"><div class="qh">Lưu ý</div><pre>Toàn bộ số liệu do trình duyệt sinh ra (seeded random walk + 9 alert rule).\n'+
-  'Không có kết nối tới InfluxDB, EMQX hay máy chủ thật; các câu query trong Inspect là query mẫu đúng cú pháp.</pre></div>');}
+  'Không có kết nối tới InfluxDB, Kafka hay thiết bị mạng thật; các câu query trong Inspect là query mẫu đúng cú pháp.</pre></div>');}
 document.addEventListener('keydown',e=>{
   const t=e.target.tagName;if(t==='INPUT'||t==='TEXTAREA')return;
   if(e.key==='Escape'){if(modal)closeModal();else if(EXP)closeExpand();else document.body.classList.remove('kiosk');return;}
@@ -1450,20 +1480,20 @@ function tick(){
   const now=times[times.length-1];
   DEV.forEach(d=>{
     if(d.st!=='off'){
-      if(rnd()<.07&&d.dfree>1)d.dfree--;
+      if(rnd()<.07&&d.tcam>1)d.tcam--;
       d.seen=(d.seen+5)%12;
       const r=rnd();let s=d.st;
       if(s==='ok'&&r<.004)s='warn';else if(s==='warn'&&r<.08)s=(rnd()<.2?'crit':'ok');
       else if(s==='crit'&&r<.12)s='warn';
-      if(d.dfree<12&&s==='ok')s='warn';
+      if(d.tcam<12&&s==='ok')s='warn';
       d.st=s;
     }else{d.seen+=5;
-      if(rnd()<.004){d.st='ok';d.seen=0;log('INFO','[RECOVERED] '+d.id+' scrape trở lại · rtt='+fx(d.rtt,2)+'ms',now);}}
+      if(rnd()<.004){d.st='ok';d.seen=0;log('INFO','%LINK-3-UPDOWN: '+d.id+' trở lại trạng thái up · rtt='+fx(d.rtt,2)+'ms',now);}}
     d.states.push(d.st);if(d.states.length>361)d.states.shift();
     d.hist.push(devVal(d));if(d.hist.length>40)d.hist.shift();});
-  ZONES.forEach((z,i)=>{HEAT[i][23]=HEAT[i][23]*.82+z.reqS.last()*.18;});
+  ZONES.forEach((z,i)=>{HEAT[i][23]=HEAT[i][23]*.82+z.bwS.last()*.18;});
   ENH[23]=ENH[23]*.9+totKw()*.1;
-  if(subTick%12===0){const l=G.lat95.last(),tot=110+Math.round(rnd()*70);
+  if(subTick%12===0){const l=G.wlat95.last(),tot=110+Math.round(rnd()*70);
     const shape=l>80?[.18,.22,.24,.2,.12,.04]:l>45?[.3,.3,.2,.13,.05,.02]:[.44,.3,.15,.07,.03,.01];
     LATH.shift();LATH.push(shape.map(p=>Math.round(tot*p*(.75+rnd()*.5))));}
   ANN=ANN.filter(a=>a.t>times[0]);
@@ -1473,7 +1503,7 @@ function tick(){
 }
 
 /* ===================== 14. KHỞI ĐỘNG ===================== */
-try{const t=localStorage.getItem('iotTheme');if(t==='dark'||t==='light'||t==='sys')themeMode=t;}catch(e){}
+try{const t=localStorage.getItem('netTheme');if(t==='dark'||t==='light'||t==='sys')themeMode=t;}catch(e){}
 readTheme();buildVars();buildMenus();build();
 document.getElementById('rangeLbl').textContent=RANGES[rangeIx].lbl;
 applyTheme();
