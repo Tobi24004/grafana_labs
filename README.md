@@ -47,6 +47,32 @@ Thêm vào menu ứng dụng để bấm mở như mọi app khác (có icon ri�
 Phím tắt của cửa sổ app: `F11` toàn màn hình · `Ctrl` `+` / `-` / `0` phóng to, thu nhỏ, về 100%
 · `Ctrl+R` hoặc `F5` nạp lại · `Ctrl+Q` thoát. Phím tắt của dashboard (`1`–`5`, `k`, `z`, `t`, `?`…)
 vẫn hoạt động y như trên web.
+
+#### Trên Windows
+
+Bấm đúp vào **`run.cmd`** — dashboard mở trong cửa sổ Edge (hoặc Chrome/Brave) ở chế độ `--app`:
+không thanh địa chỉ, không tab, không bookmark bar, trông như một app riêng. Không cần cài gì thêm
+vì Windows 10/11 luôn có sẵn Edge.
+
+Muốn có shortcut trong Start Menu và ngoài Desktop, kèm icon riêng:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File desktop\install-windows.ps1
+powershell -ExecutionPolicy Bypass -File desktop\install-windows.ps1 -Remove   # gỡ
+```
+
+Không dùng git cũng được: tải ZIP từ trang repo (**Code → Download ZIP**), giải nén rồi bấm `run.cmd`.
+
+> Hai script Windows được viết theo đúng tài liệu của Microsoft nhưng **chưa chạy thử trên máy Windows thật**
+> (môi trường phát triển là Linux). Nếu gặp lỗi, cách chắc chắn nhất luôn hoạt động là mở thẳng `index.html`.
+
+#### Trên macOS
+
+Chưa có launcher riêng. Mở thẳng `index.html`, hoặc để có cửa sổ dạng app:
+
+```bash
+open -a "Google Chrome" --args --app="file://$PWD/index.html"
+```
 **Không cần mạng** — chỉ có dòng `<link>` nạp font Google; mất mạng thì trang tự dùng font hệ thống,
 mọi thứ khác chạy nguyên vẹn vì không có một lời gọi `fetch`/`WebSocket` nào.
 
@@ -168,13 +194,16 @@ sed -i 's/@example\.com/@congty.vn/g'         index.html
 
 ```
 grafana_labs/
-├── index.html          # toàn bộ dashboard (HTML + CSS + JS nội tuyến)
-├── run.sh              # mở như app desktop (native → Chrome --app → trình duyệt)
-├── serve.sh            # chạy web server cục bộ: ./serve.sh [port]
+├── index.html              # toàn bộ dashboard (HTML + CSS + JS nội tuyến)
+├── run.sh                  # Linux: mở như app desktop (native → Chrome --app → trình duyệt)
+├── run.cmd                 # Windows: bấm đúp để mở cửa sổ app (Edge/Chrome --app)
+├── serve.sh                # chạy web server cục bộ: ./serve.sh [port]
 ├── desktop/
-│   ├── app.py          # cửa sổ native GTK + WebKit2 (--selftest để tự kiểm tra)
-│   ├── icon.svg        # icon của app
-│   └── install.sh      # thêm/gỡ app trong menu ứng dụng
+│   ├── app.py              # cửa sổ native GTK + WebKit2 (--selftest để tự kiểm tra)
+│   ├── icon.svg            # icon (Linux)
+│   ├── icon.ico            # icon (Windows, 16→256 px, dựng từ icon.svg)
+│   ├── install.sh          # thêm/gỡ app trong menu ứng dụng Linux
+│   └── install-windows.ps1 # tạo/xoá shortcut Start Menu + Desktop trên Windows
 └── README.md
 ```
 
