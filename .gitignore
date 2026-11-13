@@ -1,0 +1,10 @@
+# hệ điều hành / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# log & file tạm khi chạy server cục bộ
+*.log
+__pycache__/

@@ -1,0 +1,1484 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Vận hành hệ thống server IoT</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: nav + tab bar + variable bar, rồi các row gập được của lưới panel 24 cột */
+:root{
+  --bg:#111217; --panel:#181b1f; --hdr:#1f2227; --border:#2c3235; --border2:#3d444d;
+  --ink:#d8d9df; --ink2:#9b9ba6; --ink3:#6e7079; --accent:#ff780a; --accent-ink:#ffd4ad;
+  --s1:#ff9830; --s2:#5794f2; --s3:#73bf69; --s4:#d9b4f2; --s5:#f2cc0c; --s6:#f2495c; --s7:#52c8e8;
+  --ok:#73bf69; --warn:#f2cc0c; --serious:#ff9830; --crit:#f2495c; --off:#5c6066;
+  --grid:rgba(216,217,223,.07); --hov:#20242a; --inset:#0f1013; --shadow:rgba(0,0,0,.55);
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'Roboto Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#f4f5f5; --panel:#ffffff; --hdr:#ffffff; --border:#dde0e4; --border2:#c7d0d9;
+  --ink:#24292e; --ink2:#51565c; --ink3:#7b8087; --accent:#e0752d; --accent-ink:#8a3b00;
+  --s1:#e0752d; --s2:#1f60c4; --s3:#37872d; --s4:#8f3bb8; --s5:#e0b400; --s6:#c4162a; --s7:#0a76a0;
+  --ok:#1a7f37; --warn:#b58a00; --serious:#c05621; --crit:#c4162a; --off:#9aa0a6;
+  --grid:rgba(36,41,46,.09); --hov:#f4f5f5; --inset:#f0f1f3; --shadow:rgba(24,26,30,.18);
+  color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#f4f5f5; --panel:#ffffff; --hdr:#ffffff; --border:#dde0e4; --border2:#c7d0d9;
+  --ink:#24292e; --ink2:#51565c; --ink3:#7b8087; --accent:#e0752d; --accent-ink:#8a3b00;
+  --s1:#e0752d; --s2:#1f60c4; --s3:#37872d; --s4:#8f3bb8; --s5:#e0b400; --s6:#c4162a; --s7:#0a76a0;
+  --ok:#1a7f37; --warn:#b58a00; --serious:#c05621; --crit:#c4162a; --off:#9aa0a6;
+  --grid:rgba(36,41,46,.09); --hov:#f4f5f5; --inset:#f0f1f3; --shadow:rgba(24,26,30,.18);
+  color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--hdr);z-index:40}
+h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
+button,summary,input{font:inherit;color:inherit}button,summary{cursor:pointer}
+summary::-webkit-details-marker{display:none}summary{list-style:none}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+pre{margin:0;font-family:var(--mono);font-size:11px;white-space:pre-wrap;word-break:break-word}
+
+/* ---------- nav ---------- */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--hdr);border-bottom:1px solid var(--border)}
+.nav-in{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-block:8px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.logo{width:22px;height:22px;flex:none;border-radius:50%;background:conic-gradient(from 200deg,var(--accent),#f2cc0c 62%,var(--accent))}
+.crumb{display:flex;align-items:center;gap:7px;min-width:0}
+.crumb span{color:var(--ink3)}
+.crumb b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tagrow{display:flex;gap:4px}
+.tag{background:var(--inset);border:1px solid var(--border);border-radius:10px;padding:0 7px;font-size:10.5px;color:var(--ink3)}
+.spacer{flex:1 1 30px}
+.ctl{display:flex;align-items:center;gap:6px;background:var(--inset);border:1px solid var(--border);
+  border-radius:3px;padding:4px 9px;color:var(--ink2);white-space:nowrap;font-size:12px}
+.ctl:hover{border-color:var(--border2);color:var(--ink)}
+.ctl.on{border-color:var(--accent);color:var(--accent-ink)}
+.ctl.ico{padding:4px 7px}
+.live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 20%,transparent);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.dd{position:relative}
+.dd .menu{position:absolute;right:0;top:calc(100% + 5px);min-width:176px;background:var(--hdr);
+  border:1px solid var(--border2);border-radius:3px;box-shadow:0 8px 24px var(--shadow);padding:4px;z-index:35}
+.dd[open] .ctl{border-color:var(--accent)}
+.menu button{display:flex;width:100%;align-items:center;gap:8px;background:none;border:0;border-radius:2px;
+  padding:5px 8px;font-size:12px;color:var(--ink2);text-align:left}
+.menu button:hover{background:var(--hov);color:var(--ink)}
+.menu button.sel{color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.menu .sep{height:1px;background:var(--border);margin:4px 2px}
+.menu .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:5px 8px 2px}
+.menu .kbd{margin-left:auto;color:var(--ink3);font-family:var(--mono);font-size:10px}
+.tabs{display:flex;gap:2px;overflow-x:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:7px 12px;color:var(--ink2);font-size:12.5px;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.tab .cnt{color:var(--ink3);font-size:11px}
+.tab .dotal{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--crit);margin-left:2px;vertical-align:1px}
+
+/* ---------- variable bar ---------- */
+.vars{display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:var(--bg);border-bottom:1px solid var(--border);
+  padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.var{display:flex;align-items:center}
+.var>.k{background:var(--hdr);border:1px solid var(--border);border-right:0;border-radius:3px 0 0 3px;padding:3px 8px;color:var(--ink2);font-size:12px;white-space:nowrap}
+.var .box{background:var(--inset);border:1px solid var(--border);border-radius:0 3px 3px 0;padding:3px 8px;font-size:12px;display:flex;gap:4px;align-items:center}
+.chip{background:none;border:1px solid var(--border2);border-radius:2px;padding:1px 7px;font-size:11.5px;color:var(--ink3)}
+.chip.on{border-color:var(--accent);color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.srch{background:var(--inset);border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-size:12px;width:150px;min-width:0}
+
+/* ---------- grid + panel ---------- */
+.dash{padding-block:0 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.rowhdr{display:flex;align-items:center;gap:8px;background:none;border:0;width:100%;text-align:left;
+  padding:9px 2px 7px;color:var(--ink);font-size:12.5px;font-weight:600}
+.rowhdr .ar{color:var(--ink3);transition:transform .15s;display:inline-block}
+.rowhdr[aria-expanded="false"] .ar{transform:rotate(-90deg)}
+.rowhdr .meta{color:var(--ink3);font-weight:400;font-size:11.5px}
+.rowhdr:hover{color:var(--accent-ink)}
+.grid{display:grid;grid-template-columns:repeat(24,1fr);gap:8px;padding-bottom:4px}
+.panel{grid-column:span var(--w,24);background:var(--panel);border:1px solid var(--border);border-radius:3px;
+  display:flex;flex-direction:column;min-width:0;position:relative}
+.panel>header{display:flex;align-items:baseline;gap:7px;padding:7px 10px 2px;min-width:0}
+.panel>header h2{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel>header .sub{color:var(--ink3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.panel>header .info{color:var(--ink3);font-size:10.5px;border:1px solid var(--border2);border-radius:50%;
+  width:13px;height:13px;display:inline-flex;align-items:center;justify-content:center;flex:none;cursor:help}
+.pmenu{margin-left:auto;position:relative}
+.pmenu>summary{color:var(--ink3);padding:0 3px;letter-spacing:1px;opacity:.5;font-size:13px}
+.panel:hover .pmenu>summary,.pmenu[open]>summary{opacity:1}
+.pmenu .menu{min-width:188px}
+.body{padding:3px 10px 10px;flex:1;min-width:0;display:flex;flex-direction:column}
+.panel.expanded{position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 8px);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 8px);z-index:45;box-shadow:0 20px 60px var(--shadow)}
+.panel.expanded .plot{height:100%!important;flex:1}
+.panel.expanded .body{overflow:auto}
+.backdrop{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 70%,#000);z-index:44;display:none}
+.backdrop.on{display:block}
+body.kiosk .nav,body.kiosk .vars,body.kiosk footer{display:none}
+
+/* ---------- stat ---------- */
+.stat{position:relative;overflow:hidden;min-height:88px;justify-content:center}
+.stat .v{font-size:clamp(22px,2.3vw,32px);font-weight:600;letter-spacing:-.02em;line-height:1.08}
+.stat .u{font-size:.5em;font-weight:500;color:var(--ink2);margin-left:3px}
+.stat .d{font-size:11.5px;color:var(--ink2);margin-top:3px}
+.stat .d i{font-style:normal;font-weight:600}
+.stat canvas{position:absolute;left:0;right:0;bottom:0;width:100%;height:42px;opacity:.45;pointer-events:none}
+.up{color:var(--ok)}.down{color:var(--crit)}.flat{color:var(--ink3)}
+
+/* ---------- plot ---------- */
+.plot{position:relative;width:100%;height:210px;min-width:0}
+.plot.sm{height:150px}.plot.xs{height:118px}.plot.lg{height:262px}
+.plot canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tip{position:absolute;z-index:9;pointer-events:none;opacity:0;transition:opacity .08s;background:var(--hdr);
+  border:1px solid var(--border2);border-radius:3px;padding:7px 9px;font-size:11.5px;box-shadow:0 6px 18px var(--shadow);min-width:150px}
+.tip.on{opacity:1}
+.tip .t{color:var(--ink3);margin-bottom:5px;font-family:var(--mono);font-size:10.5px}
+.tip .r{display:flex;align-items:center;gap:9px;justify-content:space-between}
+.tip .r em{font-style:normal;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.tip .r b{font-weight:500}
+.sw{width:9px;height:3px;border-radius:2px;flex:none}
+.sw.sq{width:9px;height:9px;border-radius:2px}
+.legend{display:flex;flex-wrap:wrap;gap:3px 14px;padding-top:7px}
+.legend .it{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink2)}
+.legend .it b{color:var(--ink);font-weight:500;min-width:46px;text-align:right}
+.legend .it.off{opacity:.4}
+
+/* ---------- gauge / bar ---------- */
+.gauges{display:grid;grid-template-columns:repeat(var(--gc,4),1fr);gap:4px}
+.g{text-align:center;min-width:0}
+.g svg{width:100%;max-width:126px;height:auto;display:block;margin:0 auto}
+.g .nm{font-size:11.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bars{display:flex;flex-direction:column;gap:6px;padding-top:2px}
+.bar{display:grid;grid-template-columns:84px 1fr 52px;align-items:center;gap:8px;font-size:11.5px}
+.bar .nm{color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);font-size:11px}
+.bar .tr{height:13px;background:var(--inset);border-radius:2px;overflow:hidden;min-width:0}
+.bar .fl{height:100%;border-radius:0 2px 2px 0;transition:width .4s ease}
+.bar .vl{text-align:right;font-weight:500}
+
+/* ---------- SLO ---------- */
+.slo{display:flex;flex-direction:column;gap:9px;padding-top:2px}
+.slorow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:baseline}
+.slorow .nm{font-size:11.5px;color:var(--ink2)}
+.slorow .vv{font-weight:600;font-size:14px}
+.slotr{grid-column:1/-1;height:8px;background:var(--inset);border-radius:2px;overflow:hidden;display:flex}
+.slotr i{height:100%}
+.slomt{grid-column:1/-1;font-size:10.5px;color:var(--ink3);font-family:var(--mono)}
+
+/* ---------- table ---------- */
+.scroll{overflow:auto;max-height:260px;min-width:0}
+table.t{width:100%;border-collapse:collapse;font-size:11.5px}
+table.t.wide{min-width:680px}
+table.t th{position:sticky;top:0;background:var(--panel);text-align:left;color:var(--ink2);font-weight:500;
+  padding:5px 8px;border-bottom:1px solid var(--border2);white-space:nowrap;z-index:1}
+table.t.sortable th{cursor:pointer}
+table.t.sortable th:hover{color:var(--ink)}
+table.t th .ar{color:var(--ink3);font-size:9px}
+table.t td{padding:4px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+table.t tbody tr:hover td{background:var(--hov)}
+table.t td.r,table.t th.r{text-align:right}
+table.t td.w{white-space:normal;min-width:180px}
+table.t canvas{display:block;width:64px;height:18px}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:2px;padding:1px 7px;font-size:10.5px;font-weight:500}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.pill.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent)}
+.pill.crit{color:var(--crit);background:color-mix(in srgb,var(--crit) 15%,transparent)}
+.pill.off{color:var(--ink3);background:color-mix(in srgb,var(--ink3) 15%,transparent)}
+.pill.flat{color:var(--ink3);background:none;border:1px solid var(--border2)}
+.lab{display:inline-block;background:var(--inset);border:1px solid var(--border);border-radius:2px;
+  padding:0 5px;margin-right:3px;font-family:var(--mono);font-size:10px;color:var(--ink2)}
+.empty{color:var(--ink3);font-size:11.5px;padding:14px 2px;text-align:center}
+
+/* ---------- logs / alerts ---------- */
+.logbar{display:flex;gap:4px;padding-bottom:5px;flex-wrap:wrap;align-items:center}
+.logs{font-family:var(--mono);font-size:11px;line-height:1.6;overflow-y:auto;max-height:218px;flex:1}
+.logs .ln{display:flex;gap:8px;padding:1px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);white-space:pre-wrap;word-break:break-word}
+.logs .ts{color:var(--ink3);flex:none}
+.logs .lv{flex:none;font-weight:500}
+.lv.INFO{color:var(--s2)}.lv.WARN{color:var(--warn)}.lv.ERROR{color:var(--crit)}.lv.DEBUG{color:var(--ink3)}
+.logs .ms{color:var(--ink2);min-width:0}
+.alerts{display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:244px}
+.al{display:flex;gap:9px;background:var(--inset);border:1px solid var(--border);border-left:3px solid var(--crit);border-radius:2px;padding:7px 9px}
+.al.warn{border-left-color:var(--warn)}.al.serious{border-left-color:var(--serious)}
+.al .ic{font-size:13px;line-height:1.25}
+.al .tx{min-width:0;flex:1}
+.al .tt{font-weight:500;font-size:12px}
+.al .mt{color:var(--ink3);font-size:11px;font-family:var(--mono);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al .st{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;flex:none}
+
+/* ---------- svg ---------- */
+.svgwrap{overflow-x:auto}
+.svgwrap svg{width:100%;height:auto;display:block}
+.svgwrap.flow svg{min-width:620px}
+.svgwrap.plan svg{min-width:460px}
+
+/* ---------- modal ---------- */
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 32px));
+  max-height:min(600px,calc(100vh - 64px));background:var(--panel);border:1px solid var(--border2);border-radius:4px;
+  box-shadow:0 24px 70px var(--shadow);z-index:46;display:flex;flex-direction:column}
+.modal header{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.modal header h3{font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtabs{display:flex;gap:2px;padding:6px 12px 0;border-bottom:1px solid var(--border)}
+.mtab{background:none;border:0;border-bottom:2px solid transparent;padding:5px 10px;color:var(--ink2);font-size:12px}
+.mtab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.mbody{overflow:auto;padding:10px 12px;flex:1}
+.qblock{background:var(--inset);border:1px solid var(--border);border-radius:3px;padding:9px 10px;margin-bottom:10px}
+.qblock .qh{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:5px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:11.5px}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-family:var(--mono);font-size:11px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:12px;align-items:center}
+.keys kbd{background:var(--inset);border:1px solid var(--border2);border-bottom-width:2px;border-radius:3px;
+  padding:1px 6px;font-family:var(--mono);font-size:11px;color:var(--ink)}
+footer{color:var(--ink3);font-size:11px;padding-block:0 24px;display:flex;gap:14px;flex-wrap:wrap;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+footer b{color:var(--ink2);font-weight:500}
+
+@media (max-width:1080px){
+  .panel{grid-column:span 12}
+  .panel[data-w="16"],.panel[data-w="18"],.panel[data-w="20"],.panel[data-w="24"]{grid-column:span 24}
+}
+@media (max-width:620px){
+  .panel{grid-column:span 24!important}
+  .gauges{--gc:2}
+  .bar{grid-template-columns:70px 1fr 46px}
+  .srch{width:108px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<nav class="nav">
+  <div class="nav-in">
+    <div class="logo" aria-hidden="true"></div>
+    <div class="crumb"><span>Dashboards</span><span>/</span><span>Hạ tầng server IoT</span><span>/</span><b>IoT Platform Operations</b></div>
+    <div class="tagrow"><span class="tag">iot-platform</span><span class="tag">server</span><span class="tag">mqtt</span><span class="tag">influxdb</span><span class="tag">prod</span></div>
+    <div class="spacer"></div>
+    <details class="dd" id="ddRange"><summary class="ctl">🕘 <span id="rangeLbl">Last 1 hour</span> ▾</summary><div class="menu" id="menuRange"></div></details>
+    <button class="ctl ico" id="btnZoom" title="Zoom out khoảng thời gian (phím z)">🔍−</button>
+    <details class="dd" id="ddRef"><summary class="ctl"><span class="live" id="liveDot"></span><span id="refLbl">2s</span> ▾</summary><div class="menu" id="menuRef"></div></details>
+    <button class="ctl" id="btnTheme" title="Đổi giao diện">◐ <span id="themeLbl">Tối</span></button>
+    <button class="ctl ico" id="btnJson" title="JSON model của dashboard">{ }</button>
+    <button class="ctl ico" id="btnHelp" title="Phím tắt (?)">?</button>
+    <button class="ctl ico" id="btnKiosk" title="Kiosk — phím k, Esc để thoát">⛶</button>
+  </div>
+  <div class="tabs" id="tabs"></div>
+</nav>
+<div class="vars" id="vars"></div>
+<main class="dash" id="dash"></main>
+<div class="backdrop" id="backdrop"></div>
+<footer id="foot"></footer>
+
+<script>
+/* ===================== 1. NỀN: PRNG, THỜI GIAN ===================== */
+let seed=20261112;
+const rnd=()=>((seed=(seed*1103515245+12345)&0x7fffffff)/0x7fffffff);
+const randn=()=>{let s=0;for(let i=0;i<6;i++)s+=rnd();return (s-3)/1.2247;};
+const STEP=5000, N=1441;
+let times=[];{const t0=Date.now()-(N-1)*STEP;for(let i=0;i<N;i++)times.push(t0+i*STEP);}
+const RANGES=[{lbl:'Last 5 minutes',n:61},{lbl:'Last 15 minutes',n:181},{lbl:'Last 1 hour',n:721},{lbl:'Last 2 hours',n:1441}];
+const REFS=[{lbl:'1s',ms:1000},{lbl:'2s',ms:2000},{lbl:'5s',ms:5000},{lbl:'10s',ms:10000},{lbl:'Off',ms:0}];
+let rangeIx=2, refIx=1;
+const WIN=()=>Math.min(RANGES[rangeIx].n,N);
+const DS={tsdb:'influxdb-prod (Flux)',logs:'loki-prod (LogQL)',prom:'prometheus-infra (PromQL)'};
+const UID='iot-srv-prod01', VER=63;
+const hh=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+const hhs=t=>hh(t)+':'+String(new Date(t).getSeconds()).padStart(2,'0');
+const dmy=t=>{const d=new Date(t);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+hh(t);};
+const fx=(v,d=1)=>Number(v).toFixed(d);
+const grp=v=>Math.round(v).toLocaleString('en-US');
+const dur=ms=>{const s=Math.max(0,Math.floor(ms/1000));if(s<60)return s+'s';const m=Math.floor(s/60);
+  if(m<60)return m+'m '+(s%60)+'s';const h=Math.floor(m/60);if(h<24)return h+'h '+(m%60)+'m';return Math.floor(h/24)+'d '+(h%24)+'h';};
+const esc=s=>String(s).replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
+
+/* ===================== 2. CẢM BIẾN ===================== */
+class Sensor{
+  constructor(o){this.o=o;this.w=0;this.d=[];}
+  step(k){const o=this.o;
+    this.w+=-0.09*this.w+randn()*o.noise;
+    if(o.spikeP&&rnd()<o.spikeP)this.w+=o.spikeMag*(rnd()>.5?1:.6);
+    let v=o.base+(o.amp||0)*Math.sin(k*STEP/1000/(o.period||1800)*6.2832+(o.phase||0))+this.w;
+    if(o.min!=null)v=Math.max(o.min,v); if(o.max!=null)v=Math.min(o.max,v);
+    this.d.push(v); if(this.d.length>N)this.d.shift(); return v;}
+  last(){return this.d[this.d.length-1];}
+  at(i){return this.d[i];}
+  avg(n){const a=this.d.slice(-n);return a.reduce((x,y)=>x+y,0)/a.length;}
+  frac(n,f){const a=this.d.slice(-n);return a.filter(f).length/a.length;}
+}
+const ZONES=[
+ {id:'C1',nm:'C1 · Ingest workers',tok:'--s1',dash:[],
+  temp:{base:58,amp:2.6,noise:.42,min:30,max:92,spikeP:.0030,spikeMag:4.0},
+  mem:{base:63,amp:4,noise:.7,min:14,max:99},req:{base:720,amp:80,noise:16,min:120,max:1700,spikeP:.003,spikeMag:150},
+  iow:{base:3.1,amp:.5,noise:.17,min:0,max:9,spikeP:.003,spikeMag:1.9},kw:{base:154,amp:21,noise:3.4,min:40,max:260,period:2400}},
+ {id:'C2',nm:'C2 · Broker EMQX',tok:'--s2',dash:[7,4],
+  temp:{base:53.5,amp:1.4,noise:.24,min:28,max:88,phase:1.2},
+  mem:{base:57,amp:5,noise:.8,min:20,max:99},req:{base:640,amp:70,noise:14,min:100,max:1600,spikeP:.0035,spikeMag:140},
+  iow:{base:2.1,amp:.4,noise:.13,min:0,max:8,spikeP:.0025,spikeMag:1.5},kw:{base:121,amp:26,noise:4.1,min:30,max:240,period:1800,phase:1}},
+ {id:'C3',nm:'C3 · TSDB storage',tok:'--s3',dash:[2,4],
+  temp:{base:71,amp:2.6,noise:.5,min:34,max:96,phase:2.6,spikeP:.0035,spikeMag:5.2},
+  mem:{base:84,amp:3.4,noise:.9,min:30,max:99,spikeP:.003,spikeMag:7},req:{base:510,amp:40,noise:10,min:80,max:1300},
+  iow:{base:4.2,amp:.6,noise:.2,min:0,max:9,spikeP:.003,spikeMag:1.9},kw:{base:88,amp:14,noise:2.6,min:20,max:180,period:1500,phase:2}},
+ {id:'C4',nm:'C4 · Edge & API',tok:'--s4',dash:[9,4,2,4],
+  temp:{base:47,amp:1.1,noise:.2,min:24,max:84,phase:4},
+  mem:{base:49,amp:4,noise:.6,min:16,max:97},req:{base:580,amp:55,noise:12,min:90,max:1400},
+  iow:{base:1.6,amp:.3,noise:.1,min:0,max:6},kw:{base:63,amp:9,noise:1.9,min:15,max:140,period:2100,phase:3}}
+];
+ZONES.forEach(z=>['temp','mem','req','iow','kw'].forEach(m=>z[m+'S']=new Sensor(z[m])));
+const TOPICS=[
+ {nm:'iot/+/telemetry',tok:'--s2',dash:[],s:new Sensor({base:742,amp:70,noise:16,min:120,max:1600})},
+ {nm:'iot/+/status',tok:'--s3',dash:[7,4],s:new Sensor({base:268,amp:28,noise:8,min:40,max:700})},
+ {nm:'iot/+/command',tok:'--s1',dash:[2,4],s:new Sensor({base:96,amp:18,noise:6,min:5,max:400})},
+ {nm:'iot/+/ota',tok:'--s4',dash:[9,4,2,4],s:new Sensor({base:34,amp:12,noise:5,min:0,max:280,spikeP:.004,spikeMag:40})}
+];
+const G={
+ lat50:new Sensor({base:11,amp:2,noise:.9,min:3,max:90}),
+ lat95:new Sensor({base:28,amp:5,noise:2.2,min:8,max:190,spikeP:.0035,spikeMag:28}),
+ lat99:new Sensor({base:57,amp:9,noise:4.5,min:14,max:380,spikeP:.004,spikeMag:60}),
+ conns:new Sensor({base:50,amp:1.2,noise:.5,min:38,max:56}),
+ queue:new Sensor({base:120,amp:60,noise:22,min:0,max:900,spikeP:.004,spikeMag:180}),
+ loss:new Sensor({base:.8,amp:.35,noise:.14,min:0,max:9,spikeP:.003,spikeMag:1.8}),
+ pf:new Sensor({base:.94,amp:.02,noise:.006,min:.72,max:1}),
+ net:new Sensor({base:640,amp:120,noise:26,min:40,max:1900,spikeP:.003,spikeMag:260}),
+ disk:new Sensor({base:63.5,amp:.4,noise:.05,min:0,max:100}),
+ cpu:new Sensor({base:38,amp:9,noise:3,min:4,max:99,spikeP:.003,spikeMag:22})
+};
+const SENS=[...ZONES.flatMap(z=>[z.tempS,z.memS,z.reqS,z.iowS,z.kwS]),...TOPICS.map(t=>t.s),...Object.values(G)];
+/* mồi N mẫu lịch sử để dashboard có dữ liệu ngay khi mở, trùng trục thời gian `times` */
+for(let i=0;i<N;i++)SENS.forEach(s=>s.step(i));
+const totKw=i=>ZONES.reduce((s,z)=>s+(i==null?z.kwS.last():z.kwS.at(i)),0);
+const totMsg=i=>TOPICS.reduce((s,t)=>s+(i==null?t.s.last():t.s.at(i)),0);
+
+/* ===================== 3. THIẾT BỊ ===================== */
+const TYPES=[
+ {id:'API',nm:'API gateway',metric:'mem',unit:'% RAM',d:1},
+ {id:'BRK',nm:'MQTT broker',metric:'req',unit:'req/s',d:0},
+ {id:'ING',nm:'Ingest worker',metric:'iow',unit:'ms io',d:2},
+ {id:'TSDB',nm:'TSDB node',metric:'temp',unit:'°C',d:1},
+ {id:'EDGE',nm:'Edge gateway',metric:'net',unit:'Mbps',d:0},
+ {id:'PDU',nm:'Rack PDU',metric:'kw',unit:'kW',d:1}
+];
+const PROTOS=['25 GbE','10 GbE','1 GbE','WireGuard'];
+const AGV=['2.9.1','3.0.4','3.1.2'];
+const STLBL={ok:'Up',warn:'Warning',crit:'Critical',off:'Down'};
+const DEV=[];
+for(let i=1;i<=50;i++){
+  const z=ZONES[i%4], ty=TYPES[i%6];
+  const st=i===7?'crit':(i===4||i===19||i===33)?'warn':(i===11||i===41)?'off':'ok';
+  DEV.push({id:'srv-'+String(i).padStart(2,'0'),zone:z.id,z,ty,proto:PROTOS[i%4],
+    agv:AGV[i%7===0?0:i%3===0?1:2],dfree:Math.max(4,Math.min(96,Math.round(8+rnd()*86))),
+    rtt:+(0.3+rnd()*13).toFixed(2),ip:'10.8.'+(1+i%4)+'.'+(10+i),
+    rack:'R'+(1+i%4)+'-U'+String(4+(i%16)*2).padStart(2,'0'),
+    bias:(rnd()-.5)*(ty.metric==='req'?90:ty.metric==='net'?70:ty.metric==='kw'?9:ty.metric==='mem'?6:1.6),
+    st,seen:st==='off'?Math.round(600+rnd()*900):Math.round(rnd()*9),hist:[],states:[]});
+}
+const devVal=d=>(d.ty.metric==='net'?G.net.last():d.z[d.ty.metric+'S'].last())+d.bias;
+const devValAt=(d,i)=>(d.ty.metric==='net'?G.net.at(i):d.z[d.ty.metric+'S'].at(i))+d.bias;
+{const H=361;
+ DEV.forEach(d=>{let s=d.st==='off'?'off':'ok';
+  for(let i=0;i<H;i++){const r=rnd();
+   if(s==='ok'&&r<.006)s='warn';else if(s==='warn'&&r<.10)s=(rnd()<.25?'crit':'ok');
+   else if(s==='crit'&&r<.14)s='warn';else if(s==='off'&&r<.004)s='ok';
+   d.states.push(s);}
+  d.states[H-1]=d.st;
+  for(let i=0;i<40;i++)d.hist.push(devValAt(d,N-40+i));});}
+
+/* ===================== 4. ALERT RULE (có label + runbook) ===================== */
+const RULES=[
+ {id:'NodeTempHigh',sev:'crit',forS:120,grp:'datacenter',
+  expr:'max by(cluster) (node_hwmon_temp_celsius{cluster="C3"}) > 78',runbook:'RB-014 · Kiểm tra quạt rack & luồng khí lạnh hàng lạnh',
+  labels:{team:'datacenter',cluster:'C3',severity:'critical'},
+  test:()=>{const v=ZONES[2].tempS.last();return v>78?'value='+fx(v)+'°C ngưỡng=78°C':null;}},
+ {id:'MemoryPressure',sev:'serious',forS:300,grp:'storage',
+  expr:'max by(cluster) ((1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100) > 92',
+  runbook:'RB-007 · Hạ cache TSDB, soi rò rỉ bộ nhớ của ingest',
+  labels:{team:'storage',cluster:'C3',severity:'major'},
+  test:()=>{const v=ZONES[2].memS.last();return v>92?'RAM='+fx(v)+'% ngưỡng=92%':null;}},
+ {id:'RequestRateHigh',sev:'warn',forS:600,grp:'platform',
+  expr:'sum by(cluster) (rate(iot_requests_total[1m])) > 1150',runbook:'RB-021 · Tăng replica ingest / bật back-pressure',
+  labels:{team:'platform',severity:'warning'},
+  test:()=>{const v=Math.max(...ZONES.map(z=>z.reqS.last()));return v>1150?'value='+Math.round(v)+' req/s':null;}},
+ {id:'DiskIOWaitHigh',sev:'serious',forS:180,grp:'storage',
+  expr:'max by(cluster) (rate(node_disk_io_time_seconds_total[1m]) * 1000) > 5.2',
+  runbook:'RB-009 · Soi hàng đợi NVMe & lịch compaction',
+  labels:{team:'storage',severity:'major'},
+  test:()=>{const v=Math.max(...ZONES.map(z=>z.iowS.last()));return v>5.2?'iowait='+fx(v,2)+'ms':null;}},
+ {id:'IngestLatencyHigh',sev:'warn',forS:300,grp:'platform',
+  expr:'histogram_quantile(0.95, rate(influx_write_duration_seconds_bucket[5m])) > 0.1',
+  runbook:'RB-002 · Kiểm tra batch size & WAL',labels:{team:'platform',slo:'write-latency',severity:'warning'},
+  test:()=>{const v=G.lat95.last();return v>90?'p95='+Math.round(v)+'ms SLO=100ms':null;}},
+ {id:'IngestDropRatio',sev:'warn',forS:300,grp:'platform',
+  expr:'avg_over_time(ingest_dropped_ratio[10m]) > 0.025',runbook:'RB-011 · Soi buffer Telegraf & MTU đường truyền',
+  labels:{team:'platform',severity:'warning'},
+  test:()=>{const v=G.loss.last();return v>2.5?'drop='+fx(v,2)+'%':null;}},
+ {id:'BrokerQueueDepth',sev:'serious',forS:120,grp:'platform',
+  expr:'emqx_queued_messages > 600',runbook:'RB-004 · Scale consumer ingest',
+  labels:{team:'platform',severity:'major'},
+  test:()=>{const v=G.queue.last();return v>600?'queue='+grp(v)+' msg':null;}},
+ {id:'DiskSpaceLow',sev:'warn',forS:1800,grp:'storage',
+  expr:'min by(instance) (node_filesystem_avail_bytes / node_filesystem_size_bytes * 100) < 15',
+  runbook:'RB-017 · Dọn WAL, mở rộng volume theo host',
+  labels:{team:'storage',severity:'warning'},
+  test:()=>{const L=DEV.filter(d=>d.dfree<15&&d.st!=='off');return L.length?L.length+' host: '+L.slice(0,3).map(d=>d.id).join(', '):null;}},
+ {id:'NodeDown',sev:'serious',forS:300,grp:'sre',
+  expr:'up{job="iot-node"} == 0',runbook:'RB-001 · Quy trình xử lý host mất scrape',
+  labels:{team:'sre',severity:'major'},
+  test:()=>{const L=DEV.filter(d=>d.st==='off');return L.length?L.length+' host: '+L.map(d=>d.id).join(', '):null;}}
+];
+const SEVW={crit:0,serious:1,warn:2,ok:3};
+const sevIcon={crit:'🔥',serious:'📡',warn:'⚠️',ok:'✅'};
+const sevCol={crit:'--crit',serious:'--serious',warn:'--warn',ok:'--ok'};
+let ALERTS=new Map(), ANN=[], LOGS=[], logFilter='ALL';
+const INCIDENTS=[];
+{const now=Date.now();
+ [['INC-1042','NodeTempHigh','crit',1.6,38,'Quạt rack R3 hỏng, CPU cụm TSDB lên 82 °C','datacenter'],
+  ['INC-1041','NodeDown','serious',2.4,96,'srv-11 kernel panic sau khi vá kernel 6.8','sre'],
+  ['INC-1039','IngestLatencyHigh','warn',4.1,54,'WAL InfluxDB đầy sau đợt backfill 30 ngày','platform'],
+  ['INC-1035','MemoryPressure','serious',6.7,22,'Rò rỉ bộ nhớ ở ingest worker bản 3.0.4','storage'],
+  ['INC-1031','IngestDropRatio','warn',9.2,131,'Sai MTU giữa hai switch ToR làm rớt gói','platform'],
+  ['INC-1028','BrokerQueueDepth','serious',12.8,41,'Consumer ingest bị OOMKilled','platform']]
+ .forEach(([id,rule,sev,days,mtr,cause,team])=>INCIDENTS.push({id,rule,sev,
+   start:now-days*864e5,mttr:mtr,cause,team,state:'resolved'}));}
+function fire(key,now){
+  const r=RULES.find(x=>x.id===key.split(':')[0]);
+  const a=ALERTS.get(key);
+  if(a)return false;
+  ALERTS.set(key,{key,rule:r,sev:r.sev,since:now,detail:''});
+  ANN.push({t:now,sev:r.sev,text:r.id});if(ANN.length>60)ANN.shift();
+  log(r.sev==='crit'?'ERROR':'WARN','[PENDING] '+r.id+' · '+r.expr,now);
+  return true;
+}
+function resolve(key,now){
+  const a=ALERTS.get(key);if(!a)return;
+  ALERTS.delete(key);
+  const d=now-a.since;
+  log('INFO','[RESOLVED] '+a.rule.id+' sau '+dur(d),now);
+  if(d>60000)INCIDENTS.unshift({id:'INC-'+(1043+INCIDENTS.length),rule:a.rule.id,sev:a.sev,
+    start:a.since,mttr:Math.round(d/60000),cause:'Tự xử lý trong phiên mô phỏng',team:a.rule.labels.team,state:'resolved'});
+}
+function evalAlerts(now){
+  RULES.forEach(r=>{const res=r.test();
+    if(res){const key=r.id;if(!ALERTS.has(key))fire(key,now);const a=ALERTS.get(key);a.detail=res;a.last=now;}
+    else resolve(r.id,now);});
+}
+const alState=(a,now)=>(now-a.since)>=a.rule.forS*1000?'firing':'pending';
+function log(lv,ms,t){LOGS.unshift({lv,ms,t:t||Date.now()});if(LOGS.length>160)LOGS.pop();}
+function randomLog(t){
+  const r=rnd(), d=DEV[Math.floor(rnd()*50)];
+  if(r<.05){log('WARN','qos1 inflight window full instance='+d.id+' queue='+Math.round(G.queue.last()),t);return;}
+  if(r<.08){log('ERROR','publish timeout topic=iot/'+ZONES[Math.floor(rnd()*4)].id.toLowerCase()+'/telemetry retry=2 instance='+d.id,t);return;}
+  if(r<.13){log('DEBUG','scrape job=iot-node instance='+d.ip+':9100 duration='+fx(4+rnd()*42)+'ms samples='+Math.round(380+rnd()*900),t);return;}
+  if(r<.18){log('INFO','tsdb compaction shard='+Math.round(rnd()*48)+' level=2 size='+Math.round(120+rnd()*820)+'MB in '+fx(1+rnd()*9,1)+'s',t);return;}
+  log('INFO','recv topic=iot/'+d.zone.toLowerCase()+'/'+d.id+'/telemetry qos=1 payload={"'+d.ty.metric+'":'+fx(devVal(d),d.ty.d)+',"disk_free":'+d.dfree+'}',t);
+}
+{const now=Date.now();for(let i=40;i>=1;i--)randomLog(now-i*2600);evalAlerts(now);}
+
+/* ===================== 5. SLO ===================== */
+const SLOS=[
+ {nm:'Ingest — tỉ lệ bản tin ghi thành công',target:99.5,win:'30 ngày',unit:'%',
+  sli:()=>100-G.loss.avg(N)},
+ {nm:'Độ trễ ghi TSDB p95 < 100 ms',target:99.0,win:'30 ngày',unit:'%',
+  sli:()=>G.lat95.frac(N,v=>v<100)*100},
+ {nm:'Broker cluster khả dụng (≥ 45 kết nối)',target:99.9,win:'30 ngày',unit:'%',
+  sli:()=>G.conns.frac(N,v=>v>=45)*100},
+ {nm:'Máy chủ trả lời scrape đúng hạn',target:98.0,win:'7 ngày',unit:'%',
+  sli:()=>DEV.filter(d=>d.st!=='off').length/DEV.length*100}
+];
+const sloBudget=s=>{const allow=100-s.target,used=Math.max(0,100-s.sli());
+  return{allow,used,left:Math.max(0,1-used/allow),burn:used/allow};};
+const MAINT=[
+ ['CW46 · 14/11 22:00–02:00','Nâng agent 3.1.2 cho 18 host cụm C2','đã lên lịch','platform'],
+ ['CW46 · 16/11 06:00–07:30','Mở rộng volume TSDB thêm 2 TB (DiskSpaceLow)','đã lên lịch','storage'],
+ ['CW47 · 19/11 23:00–01:00','Nâng EMQX 5.8 → 5.9, rolling restart 3 node','chờ duyệt','platform'],
+ ['CW47 · 21/11 08:00–12:00','Vá kernel 6.8 + reboot lần lượt 9 host cụm C4','chờ duyệt','sre']
+];
+const ONCALL=[
+ ['Kíp trực A (hiện tại)','platform','ops-a@iot-platform.vn','+84 24 1800 xxx1','đang trực'],
+ ['Kíp trực B','platform','ops-b@iot-platform.vn','+84 24 1800 xxx2','18:00 nhận ca'],
+ ['SRE hạ tầng','sre','sre@iot-platform.vn','+84 24 1800 xxx3','theo lịch'],
+ ['Storage / TSDB','storage','storage@iot-platform.vn','+84 24 1800 xxx4','theo lịch'],
+ ['Kỹ thuật DC (rack/điện)','datacenter','dc@iot-platform.vn','+84 24 1800 xxx5','theo lịch']
+];
+
+/* ===================== 6. HELPER VẼ ===================== */
+let TH={};
+const TKEYS=['--ink','--ink2','--ink3','--grid','--panel','--border','--border2','--inset','--accent','--ok','--warn','--serious','--crit','--off','--s1','--s2','--s3','--s4','--s5','--s6','--s7'];
+function readTheme(){const s=getComputedStyle(document.documentElement);TKEYS.forEach(k=>TH[k]=(s.getPropertyValue(k)||'').trim()||'#888');}
+const col=t=>(t&&t[0]==='-')?(TH[t]||'#888'):t;
+function hexA(h,a){h=col(h);if(h[0]!=='#'||h.length<7)return h;return h.slice(0,7)+Math.round(Math.max(0,Math.min(1,a))*255).toString(16).padStart(2,'0');}
+function cv(canvas){const W=canvas.clientWidth,H=canvas.clientHeight;if(!W||!H)return null;
+  const dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
+  const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);c.font='10px Inter,sans-serif';return{c,W,H};}
+function ticks(lo,hi,n){const span=hi-lo||1,raw=span/n,mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const st=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=raw)||mag*10;
+  const out=[];for(let v=Math.ceil(lo/st)*st;v<=hi+1e-9;v+=st)out.push(+v.toFixed(10));return out.length?out:[lo,hi];}
+function swStyle(c,dash){c=col(c);
+  if(!dash||!dash.length)return 'background:'+c;
+  if(dash.length===2)return 'background:repeating-linear-gradient(90deg,'+c+' 0 '+dash[0]+'px,transparent '+dash[0]+'px '+(dash[0]+dash[1])+'px)';
+  return 'background:repeating-linear-gradient(90deg,'+c+' 0 7px,transparent 7px 10px,'+c+' 10px 12px,transparent 12px 15px)';}
+let HOV={t:null,src:null,y:0};
+
+/* ===================== 7. TIME SERIES ===================== */
+function TS(host,cfg){
+  const canvas=host.querySelector('canvas'), tip=host.querySelector('.tip');
+  const inst={cfg,hide:new Set(),render(){draw();},
+    data(){const n=WIN(),base=N-n,rows=[],ser=cfg.series.filter(zOK);
+      for(let i=n-1;i>=Math.max(0,n-100);i--){const r=[hhs(times[base+i])];
+        ser.forEach(s=>r.push(fx(s.d()[base+i],cfg.dec==null?1:cfg.dec)));rows.push(r);}
+      return{cols:['Thời gian',...ser.map(s=>s.nm)],rows};}};
+  function draw(){
+    const g=cv(canvas);if(!g)return;const{c,W,H}=g;
+    const n=WIN(),base=N-n,PL=44,PR=10,PT=8,PB=20,w=W-PL-PR,h=H-PT-PB;
+    if(w<30||h<24)return;
+    const vis=cfg.series.filter(s=>!inst.hide.has(s.nm)&&zOK(s));
+    let lo=1e15,hi=-1e15;
+    if(cfg.stack){for(let i=base;i<N;i++){let s=0;vis.forEach(sr=>s+=sr.d()[i]);if(s>hi)hi=s;if(s<lo)lo=s;}lo=0;}
+    else vis.forEach(s=>{const d=s.d();for(let i=base;i<N;i++){if(d[i]<lo)lo=d[i];if(d[i]>hi)hi=d[i];}});
+    if(!vis.length){lo=0;hi=1;}
+    (cfg.thresholds||[]).forEach(t=>{if(t.v>hi)hi=t.v*1.02;});
+    const pad=(hi-lo)*.16||1;lo=(cfg.zero||cfg.stack)?0:lo-pad;hi=hi+pad;
+    if(cfg.yMax!=null)hi=cfg.yMax;if(cfg.yMin!=null)lo=cfg.yMin;
+    const X=i=>PL+w*i/Math.max(1,n-1), Y=v=>PT+h-h*(v-lo)/(hi-lo||1);
+    const dec=cfg.dec!=null?cfg.dec:((hi-lo)<12?1:0);
+    (cfg.thresholds||[]).forEach(t=>{if(t.v<hi){const y=Math.max(PT,Y(hi));
+      c.fillStyle=hexA(sevCol[t.sev],.10);c.fillRect(PL,y,w,Math.min(h,Y(t.v)-y));}});
+    c.textBaseline='middle';
+    ticks(lo,hi,4).forEach(v=>{const y=Y(v);if(y<PT-1||y>PT+h+1)return;
+      c.strokeStyle=TH['--grid'];c.lineWidth=1;c.beginPath();c.moveTo(PL,Math.round(y)+.5);c.lineTo(PL+w,Math.round(y)+.5);c.stroke();
+      c.fillStyle=TH['--ink3'];c.textAlign='right';c.fillText(Math.abs(v)>=1000?grp(v):fx(v,dec),PL-7,y);});
+    c.textBaseline='top';c.textAlign='center';
+    const stp=Math.max(1,Math.round((n-1)/5));
+    for(let i=0;i<n;i+=stp){c.fillStyle=TH['--ink3'];c.fillText(hh(times[base+i]),X(i),PT+h+5);}
+    (cfg.thresholds||[]).forEach(t=>{if(t.v>=lo&&t.v<=hi){c.strokeStyle=hexA(sevCol[t.sev],.75);c.lineWidth=1;c.setLineDash([5,4]);
+      c.beginPath();c.moveTo(PL,Y(t.v)+.5);c.lineTo(PL+w,Y(t.v)+.5);c.stroke();c.setLineDash([]);}});
+    if(cfg.ann)ANN.forEach(a=>{const ix=Math.round((a.t-times[base])/STEP);if(ix<0||ix>n-1)return;
+      const x=Math.round(X(ix))+.5;c.strokeStyle=hexA(sevCol[a.sev],.8);c.lineWidth=1;c.setLineDash([3,3]);
+      c.beginPath();c.moveTo(x,PT);c.lineTo(x,PT+h);c.stroke();c.setLineDash([]);
+      c.fillStyle=col(sevCol[a.sev]);c.beginPath();c.moveTo(x-4,PT+h);c.lineTo(x+4,PT+h);c.lineTo(x,PT+h-5);c.closePath();c.fill();});
+    const acc=cfg.stack?new Float64Array(n):null;
+    vis.forEach(s=>{const d=s.d(),cc=col(s.tok),pts=[];
+      for(let i=0;i<n;i++){let v=d[base+i];if(cfg.stack){acc[i]+=v;v=acc[i];}pts.push([X(i),Y(v)]);}
+      if(cfg.area||cfg.stack){const gr=c.createLinearGradient(0,PT,0,PT+h);
+        gr.addColorStop(0,hexA(s.tok,cfg.stack?.55:.42));gr.addColorStop(1,hexA(s.tok,.02));
+        c.beginPath();c.moveTo(pts[0][0],PT+h);pts.forEach(p=>c.lineTo(p[0],p[1]));c.lineTo(pts[n-1][0],PT+h);c.closePath();c.fillStyle=gr;c.fill();}
+      c.beginPath();pts.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));
+      c.strokeStyle=cc;c.lineWidth=cfg.thin?1.4:2;c.lineJoin='round';
+      c.setLineDash(s.dash&&s.dash.length?s.dash:[]);c.stroke();c.setLineDash([]);
+      const lp=pts[n-1];c.beginPath();c.arc(lp[0],lp[1],3.1,0,6.2832);c.fillStyle=cc;c.fill();
+      c.strokeStyle=TH['--panel'];c.lineWidth=2;c.stroke();});
+    if(HOV.t!=null){
+      const ix=Math.round((HOV.t-times[base])/STEP);
+      if(ix>=0&&ix<=n-1){
+        const x=Math.round(X(ix))+.5;
+        c.strokeStyle=hexA('--ink',.3);c.lineWidth=1;c.setLineDash([3,3]);
+        c.beginPath();c.moveTo(x,PT);c.lineTo(x,PT+h);c.stroke();c.setLineDash([]);
+        let accv=0,rows='<div class="t">'+hhs(times[base+ix])+'</div>';
+        vis.forEach(s=>{const raw=s.d()[base+ix];let v=raw;if(cfg.stack){accv+=raw;v=accv;}
+          c.beginPath();c.arc(x,Y(v),3.8,0,6.2832);c.fillStyle=col(s.tok);c.fill();
+          c.strokeStyle=TH['--panel'];c.lineWidth=2;c.stroke();
+          rows+='<div class="r"><em><i class="sw" style="'+swStyle(s.tok,s.dash)+'"></i>'+s.nm+'</em><b class="num">'+
+            (Math.abs(raw)>=1000?grp(raw):fx(raw,dec))+(cfg.unit||'')+'</b></div>';});
+        if(cfg.stack)rows+='<div class="r" style="border-top:1px solid '+TH['--border']+';margin-top:4px;padding-top:4px"><em>Tổng</em><b class="num">'+
+          (accv>=1000?grp(accv):fx(accv,dec))+(cfg.unit||'')+'</b></div>';
+        const an=ANN.filter(a=>Math.abs(a.t-times[base+ix])<STEP*1.5);
+        if(an.length)rows+='<div class="r" style="margin-top:5px"><em style="color:'+col(sevCol[an[0].sev])+'">⚑ '+an[0].text+'</em></div>';
+        if(HOV.src===host){tip.innerHTML=rows;tip.classList.add('on');
+          const tw=tip.offsetWidth;let tx=x+14;if(tx+tw>W-4)tx=x-tw-14;
+          tip.style.left=Math.max(4,tx)+'px';
+          tip.style.top=Math.max(4,Math.min(H-tip.offsetHeight-4,HOV.y-12))+'px';}
+        else tip.classList.remove('on');
+      }else tip.classList.remove('on');
+    }else tip.classList.remove('on');
+    inst._geo={PL,PT,w,h,n,base};
+  }
+  host.addEventListener('mousemove',e=>{const r=host.getBoundingClientRect(),gg=inst._geo;if(!gg)return;
+    const ix=Math.round((e.clientX-r.left-gg.PL)/gg.w*(gg.n-1));
+    HOV=(ix<0||ix>gg.n-1)?{t:null,src:null,y:0}:{t:times[gg.base+ix],src:host,y:e.clientY-r.top};
+    renderCross();});
+  host.addEventListener('mouseleave',()=>{HOV={t:null,src:null,y:0};renderCross();});
+  return inst;
+}
+
+/* ===================== 8. DỮ LIỆU DẪN XUẤT ===================== */
+const HRS=[];{const h=new Date().getHours();for(let i=23;i>=0;i--)HRS.push((h-i+24)%24);}
+const HEAT=ZONES.map(z=>HRS.map((_,i)=>z.req.base+randn()*60+(i>14?90:0)+rnd()*80));
+const LATB=['< 10 ms','10–25','25–50','50–100','100–200','> 200'];
+const LATH=[];for(let c=0;c<24;c++){const cl=[];const tot=120+Math.round(rnd()*60);
+  [.42,.3,.16,.08,.03,.01].forEach(p=>cl.push(Math.round(tot*p*(.7+rnd()*.6))));LATH.push(cl);}
+const ENH=HRS.map(h=>(330+(h>=7&&h<=18?150:0))+randn()*34+rnd()*40);
+let subTick=0;
+
+/* ===================== 9. CÁC BỘ VẼ ===================== */
+function mkTS(body,cfg){
+  body.innerHTML='<div class="plot '+(cfg.h||'')+'"><canvas></canvas><div class="tip"></div></div><div class="legend"></div>';
+  const host=body.querySelector('.plot'), leg=body.querySelector('.legend'), inst=TS(host,cfg);
+  leg.addEventListener('click',e=>{const b=e.target.closest('.it');if(!b)return;
+    const nm=b.dataset.nm;inst.hide.has(nm)?inst.hide.delete(nm):inst.hide.add(nm);renderVisible();});
+  return {render(){inst.render();
+      leg.innerHTML=cfg.series.filter(zOK).map(s=>{const d=s.d(),v=d[d.length-1];
+        return '<button class="it'+(inst.hide.has(s.nm)?' off':'')+'" data-nm="'+s.nm+'" style="background:none;border:0;padding:0;cursor:pointer">'+
+          '<i class="sw" style="'+swStyle(s.tok,s.dash)+'"></i>'+s.nm+' <b class="num">'+
+          (Math.abs(v)>=1000?grp(v):fx(v,cfg.dec==null?1:cfg.dec))+(cfg.unit||'')+'</b></button>';}).join('')
+        ||'<span class="it">Không có series nào được chọn</span>';},
+    data:inst.data};
+}
+function mkStat(body,cfg){
+  body.classList.add('stat');
+  body.innerHTML='<div class="v num"></div><div class="d"></div><canvas></canvas>';
+  const v=body.querySelector('.v'), d=body.querySelector('.d'), canvas=body.querySelector('canvas');
+  return {render(){const r=cfg.calc();
+      v.innerHTML=r.v+(r.u?'<span class="u">'+r.u+'</span>':'');
+      v.style.color=r.tok?col(r.tok):'';
+      d.innerHTML=r.d||'';
+      if(r.spark){const g=cv(canvas);if(g){const{c,W,H}=g;const dd=r.spark.d.slice(-120);
+        const lo=Math.min(...dd),hi=Math.max(...dd),rg=(hi-lo)||1,cc=col(r.tok||'--s2');
+        const X=i=>W*i/(dd.length-1),Y=x=>H-3-(H-9)*(x-lo)/rg;
+        const gr=c.createLinearGradient(0,0,0,H);gr.addColorStop(0,hexA(cc,.5));gr.addColorStop(1,hexA(cc,0));
+        c.beginPath();c.moveTo(0,H);dd.forEach((x,i)=>c.lineTo(X(i),Y(x)));c.lineTo(W,H);c.closePath();c.fillStyle=gr;c.fill();
+        c.beginPath();dd.forEach((x,i)=>i?c.lineTo(X(i),Y(x)):c.moveTo(X(i),Y(x)));c.strokeStyle=cc;c.lineWidth=1.6;c.stroke();}}},
+    data(){const r=cfg.calc();return{cols:['Chỉ số','Giá trị'],rows:[[cfg.nm||'value',String(r.v)+(r.u||'')]]};}};
+}
+function mkGauges(body,cfg){
+  const A0=Math.PI*.75,A1=Math.PI*2.25;
+  const arc=(r,a0,a1)=>{const p0=[60+r*Math.cos(a0),58+r*Math.sin(a0)],p1=[60+r*Math.cos(a1),58+r*Math.sin(a1)];
+    return 'M'+fx(p0[0])+' '+fx(p0[1])+' A'+r+' '+r+' 0 '+((a1-a0)>Math.PI?1:0)+' 1 '+fx(p1[0])+' '+fx(p1[1]);};
+  const wrap=document.createElement('div');wrap.className='gauges';
+  if(cfg.cols)wrap.style.setProperty('--gc',cfg.cols);
+  wrap.innerHTML=cfg.items.map((it,i)=>'<div class="g"><svg viewBox="0 0 120 96" role="img" aria-label="'+it.nm+'">'+
+    '<path d="'+arc(40,A0,A1)+'" fill="none" stroke-width="9" stroke-linecap="round" class="trk"/>'+
+    '<path class="val" data-i="'+i+'" fill="none" stroke-width="9" stroke-linecap="round"/>'+
+    '<text class="gv" data-i="'+i+'" x="60" y="60" text-anchor="middle" font-family="Inter,sans-serif" font-size="19" font-weight="600">–</text>'+
+    '<text x="60" y="76" text-anchor="middle" font-family="Inter,sans-serif" font-size="10">'+it.unit+'</text></svg>'+
+    '<div class="nm">'+it.nm+'</div></div>').join('');
+  body.append(wrap);
+  return {render(){
+      wrap.querySelectorAll('.trk').forEach(p=>p.setAttribute('stroke',TH['--border']));
+      wrap.querySelectorAll('text').forEach(t=>t.setAttribute('fill',t.classList.contains('gv')?TH['--ink']:TH['--ink3']));
+      cfg.items.forEach((it,i)=>{const v=it.get(),f=Math.max(0,Math.min(1,(v-it.min)/(it.max-it.min)));
+        const p=wrap.querySelector('.val[data-i="'+i+'"]');
+        p.setAttribute('d',f<=.002?'M60 18':arc(40,A0,A0+(A1-A0)*f));
+        p.setAttribute('stroke',col(v>=it.th[1]?'--crit':v>=it.th[0]?'--warn':'--ok'));
+        wrap.querySelector('.gv[data-i="'+i+'"]').textContent=fx(v,it.dec);});},
+    data(){return{cols:['Chỉ số','Giá trị','Đơn vị'],rows:cfg.items.map(it=>[it.nm,fx(it.get(),it.dec),it.unit])};}};
+}
+function mkBars(body,cfg){
+  const wrap=document.createElement('div');wrap.className='bars';body.append(wrap);
+  return {render(){wrap.innerHTML=cfg.rows().map(r=>'<div class="bar"><div class="nm">'+r.nm+'</div>'+
+      '<div class="tr"><div class="fl" style="width:'+Math.max(1,Math.min(100,r.v/r.max*100))+'%;background:'+col(r.tok)+'"></div></div>'+
+      '<div class="vl num" style="color:'+col(r.tok)+'">'+fx(r.v,r.dec||0)+(cfg.unit||'')+'</div></div>').join('')
+      ||'<div class="empty">Không có dữ liệu khớp bộ lọc</div>';},
+    data(){return{cols:['Mục','Giá trị'],rows:cfg.rows().map(r=>[r.nm,fx(r.v,r.dec||0)+(cfg.unit||'')])};}};
+}
+function mkSLO(body,cfg){
+  const wrap=document.createElement('div');wrap.className='slo';body.append(wrap);
+  return {render(){wrap.innerHTML=cfg.items.map(s=>{const b=sloBudget(s),sli=s.sli();
+      const c1=b.left>.5?'--ok':b.left>.2?'--warn':'--crit';
+      return '<div class="slorow"><div class="nm">'+s.nm+'</div>'+
+        '<div class="vv num" style="color:'+col(c1)+'">'+fx(sli,2)+'%</div>'+
+        '<div class="slotr"><i style="width:'+fx(b.left*100,1)+'%;background:'+col(c1)+'"></i>'+
+        '<i style="width:'+fx((1-b.left)*100,1)+'%;background:'+hexA('--crit',.35)+'"></i></div>'+
+        '<div class="slomt">target '+s.target+'% · còn '+fx(b.left*100,0)+'% ngân sách lỗi · burn '+fx(b.burn,2)+'× · cửa sổ '+s.win+'</div></div>';}).join('');},
+    data(){return{cols:['SLO','SLI','Target','Ngân sách còn','Burn'],
+      rows:cfg.items.map(s=>{const b=sloBudget(s);return[s.nm,fx(s.sli(),2)+'%',s.target+'%',fx(b.left*100,0)+'%',fx(b.burn,2)+'×'];})};}};
+}
+function mkRules(body){
+  const sc=document.createElement('div');sc.className='scroll';sc.style.maxHeight='300px';
+  const tb=document.createElement('table');tb.className='t wide';
+  tb.innerHTML='<thead><tr><th>Rule</th><th>Mức</th><th>Biểu thức</th><th>For</th><th>Labels</th><th>Trạng thái</th><th>Runbook</th></tr></thead><tbody></tbody>';
+  sc.append(tb);body.append(sc);const tbody=tb.querySelector('tbody');
+  return {render(){const now=times[times.length-1];
+      tbody.innerHTML=RULES.map(r=>{const a=ALERTS.get(r.id);
+        const st=a?alState(a,now):'ok';
+        const pill=a?(st==='firing'?'<span class="pill crit">firing '+dur(now-a.since)+'</span>':'<span class="pill warn">pending</span>')
+                   :'<span class="pill ok">normal</span>';
+        return '<tr><td style="font-family:var(--mono)">'+r.id+'</td>'+
+          '<td><span class="pill '+(r.sev==='crit'?'crit':r.sev==='serious'?'warn':'flat')+'">'+r.sev+'</span></td>'+
+          '<td class="w" style="font-family:var(--mono);color:var(--ink2);font-size:10.5px">'+esc(r.expr)+'</td>'+
+          '<td class="r num">'+dur(r.forS*1000)+'</td>'+
+          '<td>'+Object.entries(r.labels).map(([k,v])=>'<span class="lab">'+k+'='+v+'</span>').join('')+'</td>'+
+          '<td>'+pill+'</td><td style="color:var(--ink2)">'+r.runbook+'</td></tr>';}).join('');},
+    data(){return{cols:['Rule','Mức','For','Trạng thái','Runbook'],rows:RULES.map(r=>[r.id,r.sev,dur(r.forS*1000),
+      ALERTS.has(r.id)?alState(ALERTS.get(r.id),times[times.length-1]):'normal',r.runbook])};}};
+}
+function mkIncidents(body){
+  const sc=document.createElement('div');sc.className='scroll';sc.style.maxHeight='268px';
+  const tb=document.createElement('table');tb.className='t wide';
+  tb.innerHTML='<thead><tr><th>ID</th><th>Rule</th><th>Mức</th><th>Bắt đầu</th><th class="r">MTTR</th><th>Nguyên nhân gốc</th><th>Team</th></tr></thead><tbody></tbody>';
+  sc.append(tb);body.append(sc);const tbody=tb.querySelector('tbody');
+  return {render(){tbody.innerHTML=INCIDENTS.slice(0,14).map(i=>'<tr><td style="font-family:var(--mono)">'+i.id+'</td>'+
+      '<td style="font-family:var(--mono);color:var(--ink2)">'+i.rule+'</td>'+
+      '<td><span class="pill '+(i.sev==='crit'?'crit':i.sev==='serious'?'warn':'flat')+'">'+i.sev+'</span></td>'+
+      '<td class="num">'+dmy(i.start)+'</td><td class="r num">'+i.mttr+'m</td>'+
+      '<td class="w" style="color:var(--ink2)">'+esc(i.cause)+'</td><td><span class="lab">'+i.team+'</span></td></tr>').join('');},
+    data(){return{cols:['ID','Rule','Mức','Bắt đầu','MTTR (phút)','Nguyên nhân','Team'],
+      rows:INCIDENTS.map(i=>[i.id,i.rule,i.sev,dmy(i.start),String(i.mttr),i.cause,i.team])};}};
+}
+function mkHeat(body,cfg){
+  body.innerHTML='<div class="plot '+(cfg.h||'sm')+'"><canvas></canvas><div class="tip"></div></div>';
+  const host=body.querySelector('.plot'),canvas=host.querySelector('canvas'),tip=host.querySelector('.tip');
+  let hovc=null,hovr=null,geo=null;
+  host.addEventListener('mousemove',e=>{if(!geo)return;const r=host.getBoundingClientRect();
+    hovc=Math.floor((e.clientX-r.left-geo.PL)/geo.cw);hovr=Math.floor((e.clientY-r.top-geo.PT)/geo.ch);
+    const cols=cfg.cols(),rows=cfg.rows;
+    if(hovc<0||hovr<0||hovc>=cols.length||hovr>=rows.length){tip.classList.remove('on');hovc=null;}
+    else{tip.innerHTML='<div class="t">'+cols[hovc]+'</div><div class="r"><em>'+rows[hovr]+'</em><b class="num">'+
+        fx(cfg.get(hovr,hovc),cfg.dec||0)+(cfg.unit||'')+'</b></div>';
+      tip.classList.add('on');const tw=tip.offsetWidth;let tx=e.clientX-r.left+12;if(tx+tw>r.width-4)tx=e.clientX-r.left-tw-12;
+      tip.style.left=Math.max(4,tx)+'px';tip.style.top=Math.max(4,e.clientY-r.top-tip.offsetHeight-8)+'px';}
+    draw();});
+  host.addEventListener('mouseleave',()=>{hovc=null;tip.classList.remove('on');draw();});
+  function draw(){const g=cv(canvas);if(!g)return;const{c,W,H}=g;
+    const rows=cfg.rows,cols=cfg.cols(),PL=cfg.pl||66,PT=4,PB=18,PR=6,w=W-PL-PR,h=H-PT-PB;
+    if(w<30||h<20)return;
+    const cw=w/cols.length,ch=h/rows.length;geo={PL,PT,cw,ch};
+    let lo=1e15,hi=-1e15;
+    for(let r=0;r<rows.length;r++)for(let q=0;q<cols.length;q++){const v=cfg.get(r,q);if(v<lo)lo=v;if(v>hi)hi=v;}
+    if(cfg.lo!=null)lo=cfg.lo;
+    for(let r=0;r<rows.length;r++)for(let q=0;q<cols.length;q++){
+      const f=Math.max(0,Math.min(1,(cfg.get(r,q)-lo)/((hi-lo)||1)));
+      c.fillStyle=hexA(cfg.hue,.08+f*.92);
+      c.fillRect(PL+q*cw,PT+r*ch,Math.max(1,cw-2),Math.max(1,ch-2));
+      if(hovc===q&&hovr===r){c.strokeStyle=TH['--ink'];c.lineWidth=1.5;
+        c.strokeRect(PL+q*cw+.5,PT+r*ch+.5,Math.max(1,cw-2),Math.max(1,ch-2));}}
+    c.textBaseline='middle';c.textAlign='right';c.fillStyle=TH['--ink3'];
+    rows.forEach((r,i)=>{if(ch>11)c.fillText(r,PL-6,PT+ch*(i+.5));});
+    c.textAlign='center';c.textBaseline='top';
+    const stp=Math.max(1,Math.round(cols.length/8));
+    cols.forEach((cl,i)=>{if(i%stp===0)c.fillText(cl,PL+cw*(i+.5),PT+h+4);});
+    const lw=70,lx=W-PR-lw,ly=PT+h+4;
+    for(let i=0;i<lw;i++){c.fillStyle=hexA(cfg.hue,.08+i/lw*.92);c.fillRect(lx+i,ly+1,1,7);}
+    c.fillStyle=TH['--ink3'];c.textAlign='right';c.fillText(fx(hi,cfg.dec||0),lx-4,ly);}
+  return {render:draw,data(){const cols=cfg.cols();return{cols:['Hàng',...cols],
+    rows:cfg.rows.map((r,i)=>[r,...cols.map((_,q)=>fx(cfg.get(i,q),cfg.dec||0))])};}};
+}
+function mkTimeline(body,cfg){
+  body.innerHTML='<div class="plot '+(cfg.h||'sm')+'"><canvas></canvas><div class="tip"></div></div>'+
+    '<div class="legend">'+['ok','warn','crit','off'].map(s=>'<span class="it"><i class="sw sq" data-s="'+s+'"></i>'+STLBL[s]+'</span>').join('')+'</div>';
+  const host=body.querySelector('.plot'),canvas=host.querySelector('canvas'),tip=host.querySelector('.tip'),leg=body.querySelector('.legend');
+  let geo=null;
+  host.addEventListener('mousemove',e=>{if(!geo)return;const r=host.getBoundingClientRect();
+    const list=cfg.list(),ri=Math.floor((e.clientY-r.top-geo.PT)/geo.rh),ci=Math.floor((e.clientX-r.left-geo.PL)/geo.cw);
+    if(ri<0||ri>=list.length||ci<0||ci>=geo.n){tip.classList.remove('on');return;}
+    const d=list[ri],st=d.states[d.states.length-geo.n+ci]||'ok';
+    tip.innerHTML='<div class="t">'+d.id+' · '+d.zone+'</div><div class="r"><em><i class="sw sq" style="background:'+
+      col('--'+(st==='off'?'off':st))+'"></i>'+STLBL[st]+'</em><b>'+d.ty.nm+'</b></div>';
+    tip.classList.add('on');const tw=tip.offsetWidth;let tx=e.clientX-r.left+12;if(tx+tw>r.width-4)tx=e.clientX-r.left-tw-12;
+    tip.style.left=Math.max(4,tx)+'px';tip.style.top=Math.max(4,e.clientY-r.top-tip.offsetHeight-8)+'px';});
+  host.addEventListener('mouseleave',()=>tip.classList.remove('on'));
+  function draw(){
+    leg.querySelectorAll('.sw').forEach(i=>i.style.background=col('--'+i.dataset.s));
+    const g=cv(canvas);if(!g)return;const{c,W,H}=g;const list=cfg.list();
+    const PL=72,PT=3,PB=17,PR=6,w=W-PL-PR,h=H-PT-PB;if(w<30||h<16||!list.length)return;
+    const n=Math.min(361,WIN()),rh=h/list.length,cw=w/n;geo={PL,PT,rh,cw,n};
+    list.forEach((d,ri)=>{const st=d.states.slice(-n);let i=0;
+      while(i<st.length){let j=i;while(j<st.length&&st[j]===st[i])j++;
+        c.fillStyle=col('--'+(st[i]==='off'?'off':st[i]));
+        c.fillRect(PL+cw*i,PT+rh*ri+1,Math.max(1,cw*(j-i)-.5),Math.max(2,rh-3));i=j;}
+      if(rh>10){c.fillStyle=TH['--ink2'];c.textAlign='right';c.textBaseline='middle';c.fillText(d.id,PL-6,PT+rh*(ri+.5));}});
+    c.fillStyle=TH['--ink3'];c.textAlign='center';c.textBaseline='top';
+    const base=times.length-n;
+    for(let i=0;i<n;i+=Math.max(1,Math.round(n/5)))c.fillText(hh(times[base+i]),PL+cw*i,PT+h+4);}
+  return {render:draw,data(){return{cols:['Host','Trạng thái','Cụm','Vai trò'],
+    rows:cfg.list().map(d=>[d.id,STLBL[d.st],d.zone,d.ty.nm])};}};
+}
+function mkHist(body,cfg){
+  body.innerHTML='<div class="plot '+(cfg.h||'sm')+'"><canvas></canvas></div>';
+  const canvas=body.querySelector('canvas');
+  function draw(){const g=cv(canvas);if(!g)return;const{c,W,H}=g;const bins=cfg.bins();
+    const PL=28,PT=8,PB=20,PR=6,w=W-PL-PR,h=H-PT-PB;if(w<20||h<20)return;
+    const hi=Math.max(1,...bins.map(b=>b.n));
+    ticks(0,hi,3).forEach(v=>{const y=PT+h-h*v/hi;c.strokeStyle=TH['--grid'];c.beginPath();
+      c.moveTo(PL,Math.round(y)+.5);c.lineTo(PL+w,Math.round(y)+.5);c.stroke();
+      c.fillStyle=TH['--ink3'];c.textAlign='right';c.textBaseline='middle';c.fillText(String(v),PL-6,y);});
+    const bw=w/bins.length;
+    bins.forEach((b,i)=>{const bh=h*b.n/hi,x=PL+i*bw+2,y=PT+h-bh,ww=Math.max(1,bw-4),rr=Math.min(4,ww/2,bh);
+      c.fillStyle=col(b.tok||cfg.tok||'--s2');
+      c.beginPath();c.moveTo(x,PT+h);c.lineTo(x,y+rr);c.quadraticCurveTo(x,y,x+rr,y);c.lineTo(x+ww-rr,y);
+      c.quadraticCurveTo(x+ww,y,x+ww,y+rr);c.lineTo(x+ww,PT+h);c.closePath();c.fill();
+      c.fillStyle=TH['--ink3'];c.textAlign='center';c.textBaseline='top';c.fillText(b.lbl,PL+i*bw+bw/2,PT+h+4);});}
+  return {render:draw,data(){return{cols:['Nhóm','Số lượng'],rows:cfg.bins().map(b=>[b.lbl,String(b.n)])};}};
+}
+function mkVBars(body,cfg){
+  body.innerHTML='<div class="plot '+(cfg.h||'sm')+'"><canvas></canvas><div class="tip"></div></div>';
+  const host=body.querySelector('.plot'),canvas=host.querySelector('canvas'),tip=host.querySelector('.tip');
+  let geo=null;
+  host.addEventListener('mousemove',e=>{if(!geo)return;const r=host.getBoundingClientRect();
+    const items=cfg.items(),i=Math.floor((e.clientX-r.left-geo.PL)/geo.bw);
+    if(i<0||i>=items.length){tip.classList.remove('on');return;}
+    tip.innerHTML='<div class="t">'+items[i].lbl+'</div><div class="r"><em>'+(cfg.nm||'Giá trị')+'</em><b class="num">'+
+      fx(items[i].v,cfg.dec||0)+(cfg.unit||'')+'</b></div>';
+    tip.classList.add('on');const tw=tip.offsetWidth;let tx=e.clientX-r.left+12;if(tx+tw>r.width-4)tx=e.clientX-r.left-tw-12;
+    tip.style.left=Math.max(4,tx)+'px';tip.style.top='8px';});
+  host.addEventListener('mouseleave',()=>tip.classList.remove('on'));
+  function draw(){const g=cv(canvas);if(!g)return;const{c,W,H}=g;const items=cfg.items();
+    const PL=34,PT=8,PB=20,PR=6,w=W-PL-PR,h=H-PT-PB;if(w<20||h<20||!items.length)return;
+    const hi=Math.max(...items.map(i=>i.v))*1.1,bw=w/items.length;geo={PL,bw};
+    ticks(0,hi,3).forEach(v=>{const y=PT+h-h*v/hi;c.strokeStyle=TH['--grid'];c.beginPath();
+      c.moveTo(PL,Math.round(y)+.5);c.lineTo(PL+w,Math.round(y)+.5);c.stroke();
+      c.fillStyle=TH['--ink3'];c.textAlign='right';c.textBaseline='middle';c.fillText(v>=1000?grp(v):String(v),PL-6,y);});
+    items.forEach((b,i)=>{const bh=h*b.v/hi,x=PL+i*bw+1.5,y=PT+h-bh,ww=Math.max(1,bw-3),rr=Math.min(4,ww/2,bh);
+      c.fillStyle=col(b.tok||cfg.tok||'--s2');
+      c.beginPath();c.moveTo(x,PT+h);c.lineTo(x,y+rr);c.quadraticCurveTo(x,y,x+rr,y);c.lineTo(x+ww-rr,y);
+      c.quadraticCurveTo(x+ww,y,x+ww,y+rr);c.lineTo(x+ww,PT+h);c.closePath();c.fill();});
+    c.fillStyle=TH['--ink3'];c.textAlign='center';c.textBaseline='top';
+    items.forEach((b,i)=>{if(i%Math.max(1,Math.round(items.length/8))===0)c.fillText(b.lbl,PL+i*bw+bw/2,PT+h+4);});}
+  return {render:draw,data(){return{cols:['Mốc',cfg.nm||'Giá trị'],rows:cfg.items().map(b=>[b.lbl,fx(b.v,cfg.dec||0)])};}};
+}
+function mkDonut(body,cfg){
+  body.innerHTML='<div class="plot xs" style="height:132px"><canvas></canvas></div><div class="legend"></div>';
+  const canvas=body.querySelector('canvas'),leg=body.querySelector('.legend');
+  function draw(){const g=cv(canvas);if(!g)return;const{c,W,H}=g;const items=cfg.items();
+    const tot=items.reduce((s,i)=>s+i.v,0)||1,cx=W/2,cy=H/2,R=Math.min(W,H)/2-6,r0=R*.6;
+    let a=-Math.PI/2;
+    items.forEach(it=>{const a1=a+it.v/tot*6.2832;
+      c.beginPath();c.arc(cx,cy,R,a,a1);c.arc(cx,cy,r0,a1,a,true);c.closePath();
+      c.fillStyle=col(it.tok);c.fill();c.strokeStyle=TH['--panel'];c.lineWidth=2;c.stroke();a=a1;});
+    const ctr=cfg.center?cfg.center():null;
+    if(ctr){c.textAlign='center';c.fillStyle=TH['--ink'];c.font='600 17px Inter,sans-serif';
+      c.textBaseline='alphabetic';c.fillText(ctr.v,cx,cy+2);
+      c.font='10px Inter,sans-serif';c.fillStyle=TH['--ink3'];c.textBaseline='top';c.fillText(ctr.lbl,cx,cy+6);}
+    leg.innerHTML=items.map(it=>'<span class="it"><i class="sw sq" style="background:'+col(it.tok)+'"></i>'+it.nm+
+      ' <b class="num">'+fx(it.v/tot*100,0)+'%</b></span>').join('');}
+  return {render:draw,data(){const items=cfg.items(),tot=items.reduce((s,i)=>s+i.v,0)||1;
+    return{cols:['Nhóm','Giá trị','Tỉ lệ'],rows:items.map(i=>[i.nm,fx(i.v,1),fx(i.v/tot*100,1)+'%'])};}};
+}
+function mkDevTable(body){
+  const bar=document.createElement('div');bar.className='logbar';
+  bar.innerHTML='<input class="srch" id="devSrch" placeholder="Tìm hostname…" aria-label="Tìm máy chủ">'+
+    '<button class="chip on" data-st="all">Tất cả</button>'+['ok','warn','crit','off'].map(s=>
+      '<button class="chip" data-st="'+s+'">'+STLBL[s]+'</button>').join('');
+  const sc=document.createElement('div');sc.className='scroll';sc.style.maxHeight='320px';
+  const tb=document.createElement('table');tb.className='t wide sortable';
+  const COLS=[['id','Host'],['zone','Cụm'],['ty','Vai trò'],['rack','Rack'],['proto','Uplink'],['agv','Agent'],
+    ['rtt','RTT',1],['val','Giá trị',1],['dfree','Đĩa trống',1],['st','Trạng thái'],['seen','Last scrape',1],['sp','20 mẫu']];
+  let sort='id',dir=1,stFilter='all',q='';
+  tb.innerHTML='<thead><tr>'+COLS.map(c=>'<th data-k="'+c[0]+'"'+(c[2]?' class="r"':'')+'>'+c[1]+' <span class="ar"></span></th>').join('')+'</tr></thead><tbody></tbody>';
+  const tbody=tb.querySelector('tbody');sc.append(tb);body.append(bar,sc);
+  bar.addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;
+    stFilter=b.dataset.st;bar.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b));renderVisible();});
+  bar.querySelector('#devSrch').addEventListener('input',e=>{q=e.target.value.toLowerCase();renderVisible();});
+  tb.querySelector('thead').addEventListener('click',e=>{const th=e.target.closest('th');if(!th||th.dataset.k==='sp')return;
+    if(sort===th.dataset.k)dir=-dir;else{sort=th.dataset.k;dir=1;}renderVisible();});
+  function rows(){
+    const L=DEV.filter(d=>ZSEL.has(d.zone)&&TSEL.has(d.ty.id)&&(stFilter==='all'||d.st===stFilter)&&(!q||d.id.includes(q)));
+    const key=d=>sort==='val'?devVal(d):sort==='ty'?d.ty.nm:sort==='st'?SEVW[d.st==='off'?'serious':d.st]:d[sort];
+    return L.sort((a,b)=>{const x=key(a),y=key(b);return (x>y?1:x<y?-1:0)*dir;});}
+  return {render(){
+      tb.querySelectorAll('th').forEach(th=>th.querySelector('.ar').textContent=th.dataset.k===sort?(dir>0?'▲':'▼'):'');
+      const L=rows();
+      if(!L.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty">Không có máy chủ khớp bộ lọc</div></td></tr>';return;}
+      tbody.innerHTML=L.map(d=>'<tr><td style="font-family:var(--mono)" title="'+d.ip+'">'+d.id+'</td><td>'+d.zone+'</td>'+
+        '<td style="color:var(--ink2)">'+d.ty.nm+'</td><td style="font-family:var(--mono);color:var(--ink3)">'+d.rack+'</td>'+
+        '<td style="color:var(--ink2)">'+d.proto+'</td>'+
+        '<td style="font-family:var(--mono);color:'+(d.agv==='3.1.2'?'':col('--warn'))+'">'+d.agv+'</td>'+
+        '<td class="r num" style="color:'+col(d.rtt>=8?'--crit':d.rtt>=4?'--warn':'')+'">'+fx(d.rtt,2)+' ms</td>'+
+        '<td class="r num">'+(d.st==='off'?'—':fx(devVal(d),d.ty.d)+' '+d.ty.unit)+'</td>'+
+        '<td class="r num" style="color:'+col(d.dfree<15?'--crit':d.dfree<30?'--warn':d.dfree<55?'--serious':'--ok')+'">'+d.dfree+'%</td>'+
+        '<td><span class="pill '+(d.st==='off'?'off':d.st)+'">'+STLBL[d.st]+'</span></td>'+
+        '<td class="r num" style="color:'+(d.seen>60?col('--crit'):'')+'">'+dur(d.seen*1000)+'</td>'+
+        '<td><canvas data-id="'+d.id+'" width="64" height="18"></canvas></td></tr>').join('');
+      tbody.querySelectorAll('canvas').forEach(canvas=>{const d=DEV.find(x=>x.id===canvas.dataset.id);if(!d)return;
+        const dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=64*dpr;canvas.height=18*dpr;
+        const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+        const h=d.hist.slice(-20),lo=Math.min(...h),hi=Math.max(...h),rg=(hi-lo)||1;
+        c.beginPath();h.forEach((v,i)=>{const x=64*i/(h.length-1),y=16-13*(v-lo)/rg;i?c.lineTo(x,y):c.moveTo(x,y);});
+        c.strokeStyle=col(d.st==='off'?'--off':d.st==='crit'?'--crit':d.st==='warn'?'--warn':d.z.tok);c.lineWidth=1.3;c.stroke();});},
+    data(){return{cols:['Host','IP','Cụm','Vai trò','Rack','Agent','RTT','Giá trị','Đĩa trống','Trạng thái'],
+      rows:rows().map(d=>[d.id,d.ip,d.zone,d.ty.nm,d.rack,d.agv,fx(d.rtt,2)+' ms',fx(devVal(d),d.ty.d)+' '+d.ty.unit,d.dfree+'%',STLBL[d.st]])};}};
+}
+function mkLogs(body,cfg){
+  const bar=document.createElement('div');bar.className='logbar';
+  bar.innerHTML=['ALL','INFO','WARN','ERROR','DEBUG'].map(l=>'<button class="chip'+(l==='ALL'?' on':'')+'" data-l="'+l+'">'+l+'</button>').join('');
+  const box=document.createElement('div');box.className='logs';if(cfg&&cfg.max)box.style.maxHeight=cfg.max;
+  body.append(bar,box);
+  bar.addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;
+    logFilter=b.dataset.l;bar.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b));renderVisible();});
+  return {render(){bar.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.l===logFilter));
+      const L=LOGS.filter(l=>logFilter==='ALL'||l.lv===logFilter).slice(0,70);
+      box.innerHTML=L.map(l=>'<div class="ln"><span class="ts">'+hhs(l.t)+'</span><span class="lv '+l.lv+'">'+l.lv+
+        '</span><span class="ms">'+esc(l.ms)+'</span></div>').join('')||'<div class="empty">Không có log ở mức này</div>';},
+    data(){return{cols:['Thời gian','Mức','Nội dung'],rows:LOGS.slice(0,60).map(l=>[hhs(l.t),l.lv,l.ms])};}};
+}
+function mkAlerts(body){
+  const wrap=document.createElement('div');wrap.className='alerts';body.append(wrap);
+  return {render(){const now=times[times.length-1];
+      const L=[...ALERTS.values()].sort((a,b)=>SEVW[a.sev]-SEVW[b.sev]||a.since-b.since);
+      wrap.innerHTML=L.length?L.map(a=>{const st=alState(a,now);
+        return '<div class="al '+a.sev+'"><div class="ic">'+sevIcon[a.sev]+'</div><div class="tx">'+
+        '<div class="tt">'+a.rule.id+' — '+a.detail+'</div>'+
+        '<div class="mt">'+Object.entries(a.rule.labels).map(([k,v])=>k+'='+v).join(' ')+' · '+dur(now-a.since)+' · '+a.rule.runbook+'</div></div>'+
+        '<div class="st" style="color:'+col(st==='firing'?sevCol[a.sev]:'--ink3')+'">'+st+'</div></div>';}).join('')
+        :'<div class="empty">✅ Không có cảnh báo nào đang mở</div>';},
+    data(){const now=times[times.length-1];return{cols:['Rule','Mức','Trạng thái','Chi tiết','Thời lượng'],
+      rows:[...ALERTS.values()].map(a=>[a.rule.id,a.sev,alState(a,now),a.detail,dur(now-a.since)])};}};
+}
+function mkPlan(body){
+  const wrap=document.createElement('div');wrap.className='svgwrap plan';
+  const Z=[[6,6],[238,6],[6,136],[238,136]];
+  DEV.forEach(d=>{const o=Z[ZONES.indexOf(d.z)];d.px=o[0]+18+rnd()*180;d.py=o[1]+30+rnd()*78;});
+  wrap.innerHTML='<svg viewBox="0 0 460 262" role="img" aria-label="Sơ đồ rack với vị trí và trạng thái máy chủ">'+
+    ZONES.map((z,i)=>'<g><rect x="'+Z[i][0]+'" y="'+Z[i][1]+'" width="216" height="120" rx="4" class="zr"/>'+
+      '<text x="'+(Z[i][0]+10)+'" y="'+(Z[i][1]+19)+'" font-family="Inter,sans-serif" font-size="11" font-weight="600" class="zl">'+z.nm+'</text>'+
+      '<text x="'+(Z[i][0]+206)+'" y="'+(Z[i][1]+19)+'" text-anchor="end" font-family="Roboto Mono,monospace" font-size="10.5" class="zt" data-z="'+i+'">–</text></g>').join('')+
+    '<g class="dots">'+DEV.map((d,i)=>'<circle data-i="'+i+'" cx="'+fx(d.px)+'" cy="'+fx(d.py)+'" r="4"><title>'+d.id+' · '+d.ty.nm+' · '+d.rack+'</title></circle>').join('')+'</g>'+
+    '<g><rect x="196" y="112" width="68" height="38" rx="4" class="gw"/>'+
+    '<text x="230" y="129" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" font-weight="600" class="zl">Core switch</text>'+
+    '<text x="230" y="142" text-anchor="middle" font-family="Roboto Mono,monospace" font-size="9" class="zt" data-gw="1">–</text></g></svg>';
+  body.append(wrap);
+  return {render(){
+      wrap.querySelectorAll('.zr').forEach(r=>{r.setAttribute('fill',TH['--inset']);r.setAttribute('stroke',TH['--border']);});
+      wrap.querySelectorAll('.gw').forEach(r=>{r.setAttribute('fill',TH['--panel']);r.setAttribute('stroke',TH['--accent']);});
+      wrap.querySelectorAll('.zl').forEach(t=>t.setAttribute('fill',TH['--ink']));
+      wrap.querySelectorAll('.zt').forEach(t=>t.setAttribute('fill',TH['--ink3']));
+      ZONES.forEach((z,i)=>{const t=wrap.querySelector('.zt[data-z="'+i+'"]');
+        if(t)t.textContent=fx(z.tempS.last())+'°C · '+Math.round(z.reqS.last())+' req/s';});
+      const gw=wrap.querySelector('.zt[data-gw="1"]');if(gw)gw.textContent=grp(totMsg())+' msg/s';
+      wrap.querySelectorAll('.dots circle').forEach(ci=>{const d=DEV[+ci.dataset.i];
+        const on=ZSEL.has(d.zone)&&TSEL.has(d.ty.id);
+        ci.setAttribute('fill',col(d.st==='off'?'--off':d.st==='crit'?'--crit':d.st==='warn'?'--warn':'--ok'));
+        ci.setAttribute('opacity',on?(d.st==='off'?.5:1):.12);
+        ci.setAttribute('r',d.st==='crit'?5.5:d.st==='warn'?4.8:4);});},
+    data(){return{cols:['Cụm','Số host','Nhiệt CPU','Tải','RAM'],
+      rows:ZONES.map(z=>[z.nm,String(DEV.filter(d=>d.zone===z.id).length),fx(z.tempS.last())+' °C',
+        Math.round(z.reqS.last())+' req/s',fx(z.memS.last())+' %'])};}};
+}
+function mkFlow(body){
+  const wrap=document.createElement('div');wrap.className='svgwrap flow';
+  wrap.innerHTML='<svg viewBox="0 0 980 176" role="img" aria-label="Luồng dữ liệu từ thiết bị IoT qua các cụm máy chủ tới Grafana">'+
+  '<defs><path id="f1" d="M172 56 H266"/><path id="f2" d="M172 112 H266"/><path id="f3" d="M402 84 H466"/>'+
+  '<path id="f4" d="M602 84 H666"/><path id="f5" d="M802 84 H866"/>'+
+  '<marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="mk"/></marker></defs>'+
+  '<g fill="none" stroke-width="1.5" marker-end="url(#ar)" class="fl"><use href="#f1"/><use href="#f2"/><use href="#f3"/><use href="#f4"/><use href="#f5"/></g>'+
+  '<g class="pk1"><circle r="3.5"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#f1"/></animateMotion></circle>'+
+  '<circle r="3.5"><animateMotion dur="2.8s" begin="-1s" repeatCount="indefinite"><mpath href="#f2"/></animateMotion></circle></g>'+
+  '<g class="pk2"><circle r="3.5"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#f3"/></animateMotion></circle>'+
+  '<circle r="3.5"><animateMotion dur="1.6s" begin="-.8s" repeatCount="indefinite"><mpath href="#f3"/></animateMotion></circle></g>'+
+  '<g class="pk3"><circle r="3.5"><animateMotion dur="1.9s" repeatCount="indefinite"><mpath href="#f4"/></animateMotion></circle></g>'+
+  '<g class="pk4"><circle r="3.5"><animateMotion dur="2.1s" repeatCount="indefinite"><mpath href="#f5"/></animateMotion></circle></g>'+
+  '<g class="bx"><rect x="28" y="30" width="144" height="52" rx="4"/><rect x="28" y="86" width="144" height="52" rx="4"/>'+
+  '<rect x="266" y="48" width="136" height="72" rx="4"/><rect x="466" y="48" width="136" height="72" rx="4"/>'+
+  '<rect x="666" y="48" width="136" height="72" rx="4"/><rect x="866" y="48" width="86" height="72" rx="4" class="last"/></g>'+
+  '<g font-family="Inter,sans-serif" font-size="12.5" font-weight="600" class="tt">'+
+  '<text x="42" y="52">12.400 × client IoT</text><text x="42" y="108">8 × edge gateway</text>'+
+  '<text x="282" y="74">LB / TLS (HAProxy)</text><text x="482" y="74">EMQX cluster · 3 node</text>'+
+  '<text x="682" y="74">Ingest → InfluxDB</text><text x="880" y="74">Grafana</text></g>'+
+  '<g font-family="Roboto Mono,monospace" font-size="10.5" class="st">'+
+  '<text x="42" y="70">MQTT 3.1.1 · QoS 1</text><text x="42" y="126">C4 · 25 GbE uplink</text>'+
+  '<text x="282" y="92">TLS 1.3 · keepalive 60s</text><text x="282" y="107" data-f="up">–</text>'+
+  '<text x="482" y="92">C2 · shared subscription</text><text x="482" y="107" data-f="conn">–</text>'+
+  '<text x="682" y="92">C1 batch 5s → C3 RP 90d</text><text x="682" y="107" data-f="lat">–</text>'+
+  '<text x="880" y="92">5 dashboard · Grafana 11.3</text><text x="880" y="107" data-f="al">–</text></g></svg>';
+  body.append(wrap);
+  return {render(){
+      wrap.querySelectorAll('.bx rect').forEach(r=>{r.setAttribute('fill',TH['--inset']);
+        r.setAttribute('stroke',r.classList.contains('last')?TH['--accent']:TH['--border']);});
+      wrap.querySelectorAll('.fl use').forEach(u=>u.setAttribute('stroke',TH['--border2']));
+      wrap.querySelectorAll('.mk').forEach(m=>m.setAttribute('fill',TH['--ink3']));
+      wrap.querySelectorAll('.tt text').forEach(t=>t.setAttribute('fill',TH['--ink']));
+      wrap.querySelectorAll('.st text').forEach(t=>t.setAttribute('fill',TH['--ink3']));
+      [['pk1','--s1'],['pk2','--s3'],['pk3','--s2'],['pk4','--s4']].forEach(p=>
+        wrap.querySelectorAll('.'+p[0]+' circle').forEach(ci=>ci.setAttribute('fill',col(p[1]))));
+      const q=s=>wrap.querySelector('[data-f="'+s+'"]');
+      q('up').textContent='ingress '+grp(totMsg())+' msg/s';
+      q('conn').textContent=Math.round(G.conns.last())+' conn · q='+Math.round(G.queue.last());
+      q('lat').textContent='p95 '+Math.round(G.lat95.last())+' ms';
+      q('al').textContent=ALERTS.size+' alert mở';},
+    data(){return{cols:['Chặng','Chỉ số'],rows:[['Ingress',grp(totMsg())+' msg/s'],
+      ['Broker',Math.round(G.conns.last())+' connections'],['Queue',Math.round(G.queue.last())+' msg'],
+      ['TSDB p95',Math.round(G.lat95.last())+' ms'],['Alerts mở',String(ALERTS.size)]]};}};
+}
+function mkTable(body,cfg){
+  const sc=document.createElement('div');sc.className='scroll';if(cfg.max)sc.style.maxHeight=cfg.max;
+  const tb=document.createElement('table');tb.className='t'+(cfg.wide?' wide':'');
+  tb.innerHTML='<thead><tr>'+(cfg.cols||[]).map((c,i)=>'<th'+(cfg.right&&cfg.right.includes(i)?' class="r"':'')+'>'+c+'</th>').join('')+'</tr></thead><tbody></tbody>';
+  sc.append(tb);body.append(sc);const tbody=tb.querySelector('tbody');
+  return {render(){tbody.innerHTML=cfg.rows().map(r=>'<tr>'+r.map((v,i)=>'<td'+(cfg.right&&cfg.right.includes(i)?' class="r num"':'')+'>'+v+'</td>').join('')+'</tr>').join('')
+      ||'<tr><td colspan="'+(cfg.cols||[]).length+'"><div class="empty">Không có dữ liệu</div></td></tr>';},
+    data(){return{cols:cfg.cols||[],rows:cfg.rows().map(r=>r.map(x=>String(x).replace(/<[^>]*>/g,'')))};}};
+}
+
+/* ===================== 10. TEMPLATE VARIABLE ===================== */
+const ZSEL=new Set(ZONES.map(z=>z.id)), TSEL=new Set(TYPES.map(t=>t.id));
+const zOK=s=>!s.zone||ZSEL.has(s.zone);
+const zSeries=m=>ZONES.map(z=>({nm:z.nm,tok:z.tok,dash:z.dash,zone:z.id,d:()=>z[m+'S'].d}));
+const devOf=()=>DEV.filter(d=>ZSEL.has(d.zone)&&TSEL.has(d.ty.id));
+const zoneSet=()=>'['+[...ZSEL].map(z=>'"'+z+'"').join(', ')+']';
+const Q={
+ temp:'from(bucket: "iot")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == "node" and r._field == "cpu_temp")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: "mean")',
+ req:'from(bucket: "iot")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == "node" and r._field == "req_rate")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> aggregateWindow(every: 1h, fn: mean)\n  |> pivot(rowKey: ["_time"], columnKey: ["cluster"], valueColumn: "_value")',
+ kw:'from(bucket: "iot")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == "rack_power" and r._field == "kw")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)\n  |> group(columns: ["cluster"])',
+ msg:'sum by (topic) (rate(emqx_messages_received_total{topic=~"iot/.+"}[1m]))',
+ lat:'histogram_quantile(0.95, sum by (le) (rate(influx_write_duration_seconds_bucket[5m]))) * 1000',
+ host:'from(bucket: "iot")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == "node_state")\n  |> filter(fn: (r) => contains(value: r.cluster, set: ${cluster:json}))\n  |> last()\n  |> pivot(rowKey: ["instance"], columnKey: ["_field"], valueColumn: "_value")',
+ logs:'{job="iot-platform", env="prod"} |= "" | pattern `<_> <level> <msg>` | level =~ "${level}"',
+ mem:'max by (cluster) ((1 - node_memory_MemAvailable_bytes{cluster=~"${cluster:regex}"} / node_memory_MemTotal_bytes) * 100)',
+ disk:'min by (instance) (node_filesystem_avail_bytes{cluster=~"${cluster:regex}", mountpoint="/data"} / node_filesystem_size_bytes * 100)',
+ cpu:'100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle", cluster=~"${cluster:regex}"}[1m]) * 100)',
+ slo:'1 - (sum(increase(influx_write_failed_total[30d])) / sum(increase(influx_write_total[30d])))',
+ rules:'ALERTS{job="iot-platform"}  # nguồn: Grafana unified alerting / Alertmanager'
+};
+
+/* ===================== 11. ĐẶC TẢ DASHBOARD ===================== */
+const TABS=[{id:'ov',nm:'Tổng quan'},{id:'dev',nm:'Máy chủ'},{id:'en',nm:'Điện năng DC'},
+  {id:'inf',nm:'Hạ tầng dữ liệu'},{id:'ops',nm:'Vận hành & SLO'}];
+const SPEC={
+ov:[
+ {row:'Sức khoẻ hệ thống',panels:[
+  {w:4,t:'Máy chủ online',k:'stat',ds:'prom',q:'count(up{job="iot-node"} == 1)',
+   d:'Số máy chủ còn trả lời scrape trong 10 phút gần nhất, trên tổng 50 host đã khai báo trong inventory.',
+   c:{nm:'host',calc:()=>{const on=DEV.filter(d=>d.st!=='off').length;
+     return{v:String(on),u:'/50',d:(50-on)+' host mất scrape · <i class="'+(on>=48?'up':'down')+'">'+Math.round(on/50*100)+'%</i>',
+     tok:on>=48?'--ok':'--warn',spark:G.conns};}}},
+  {w:4,t:'Thông lượng MQTT',k:'stat',ds:'prom',q:Q.msg,
+   d:'Tổng tốc độ bản tin broker nhận được, cộng trên 4 nhóm topic.',
+   c:{nm:'msg/s',calc:()=>{const m=totMsg(),p=totMsg(N-13),dl=(m-p)/p*100;
+     return{v:fx(m/1000,2),u:'k msg/s',d:'4 nhóm topic · <i class="'+(dl>=0?'up':'down')+'">'+(dl>=0?'▲ ':'▼ ')+fx(Math.abs(dl))+'%</i>',
+     tok:'--s2',spark:TOPICS[0].s};}}},
+  {w:4,t:'Ghi TSDB (p95)',k:'stat',ds:'prom',q:Q.lat,
+   d:'Độ trễ ghi InfluxDB phân vị 95 ở cụm C3. SLO nội bộ: dưới 100 ms.',
+   c:{nm:'p95',calc:()=>{const v=G.lat95.last();
+     return{v:String(Math.round(v)),u:'ms',d:'SLO &lt; 100 ms · <i class="'+(v>100?'down':'flat')+'">'+(v>100?'vi phạm':'đạt')+'</i>',
+     tok:v>100?'--crit':v>60?'--warn':'--s3',spark:G.lat95};}}},
+  {w:4,t:'Bản tin bị rớt',k:'stat',ds:'prom',q:'avg_over_time(ingest_dropped_ratio[10m]) * 100',
+   d:'Tỉ lệ bản tin bị loại ở tầng ingest (buffer đầy, sai schema hoặc hết hạn retry).',
+   c:{nm:'drop',calc:()=>{const v=G.loss.last();
+     return{v:fx(v,2),u:'%',d:'ngưỡng 2.5% · <i class="'+(v>2.5?'down':'up')+'">'+(v>2.5?'vượt ngưỡng':'bình thường')+'</i>',
+     tok:v>2.5?'--crit':'--s3',spark:G.loss};}}},
+  {w:4,t:'Điện năng tức thời',k:'stat',ds:'tsdb',q:Q.kw,
+   d:'Tổng công suất PDU của 4 cụm rack tại thời điểm hiện tại.',
+   c:{nm:'kW',calc:()=>({v:grp(totKw()),u:'kW',d:'4 cụm rack · PF '+fx(G.pf.last(),3),tok:'--s1',spark:ZONES[0].kwS})}},
+  {w:4,t:'Cảnh báo đang mở',k:'stat',ds:'prom',q:Q.rules,
+   d:'Số alert instance đang ở trạng thái pending hoặc firing.',
+   c:{nm:'alerts',calc:()=>{const L=[...ALERTS.values()];
+     const cr=L.filter(a=>a.sev==='crit').length,se=L.filter(a=>a.sev==='serious').length;
+     return{v:String(L.length),d:'<i class="down">'+cr+' critical</i> · '+se+' major · '+(L.length-cr-se)+' warning',
+     tok:cr?'--crit':L.length?'--warn':'--ok',spark:ZONES[2].tempS};}}}]},
+ {row:'Tài nguyên cụm máy chủ',panels:[
+  {w:16,t:'Nhiệt độ CPU theo cụm',s:'°C · mean(5s) · ngưỡng 78 °C',k:'ts',ds:'tsdb',q:Q.temp,
+   d:'Nhiệt độ CPU trung bình từng cụm. Dải đỏ là vùng vượt ngưỡng rule NodeTempHigh; cờ dưới trục là annotation mỗi lần alert chuyển trạng thái.',
+   c:{series:zSeries('temp'),unit:' °C',ann:true,h:'lg',thresholds:[{v:78,sev:'crit'}]}},
+  {w:8,t:'Tài nguyên theo cụm',s:'giá trị hiện tại',k:'gauges',ds:'prom',q:Q.mem,
+   d:'Gauge tổng hợp trên các cụm đang chọn ở biến $cluster.',
+   c:{cols:4,items:[
+    {nm:'Nhiệt CPU TB',get:()=>{const L=ZONES.filter(z=>ZSEL.has(z.id));return L.length?L.reduce((s,z)=>s+z.tempS.last(),0)/L.length:0;},min:20,max:100,unit:'°C',dec:1,th:[70,78]},
+    {nm:'RAM đã dùng',get:()=>{const L=ZONES.filter(z=>ZSEL.has(z.id));return L.length?L.reduce((s,z)=>s+z.memS.last(),0)/L.length:0;},min:0,max:100,unit:'%',dec:0,th:[85,92]},
+    {nm:'Tải cao nhất',get:()=>Math.max(0,...ZONES.filter(z=>ZSEL.has(z.id)).map(z=>z.reqS.last())),min:0,max:1600,unit:'req/s',dec:0,th:[900,1150]},
+    {nm:'I/O wait đỉnh',get:()=>Math.max(0,...ZONES.filter(z=>ZSEL.has(z.id)).map(z=>z.iowS.last())),min:0,max:9,unit:'ms',dec:2,th:[4,5.2]}]}},
+  {w:12,t:'Tải xử lý theo giờ × cụm',s:'24 giờ qua · req/s',k:'heat',ds:'tsdb',q:Q.req,
+   d:'Heatmap một sắc: càng đậm càng nhiều request. Dùng để thấy khung giờ nào cụm nào chịu tải đỉnh.',
+   c:{rows:ZONES.map(z=>z.nm),cols:()=>HRS.map(h=>String(h).padStart(2,'0')+'h'),
+      get:(r,c)=>HEAT[r][c],hue:'--s7',unit:' req/s',dec:0,pl:108}},
+  {w:12,t:'Trạng thái máy chủ theo thời gian',s:'state timeline · 12 host',k:'timeline',ds:'tsdb',q:Q.host,
+   d:'Mỗi hàng là một host, mỗi dải màu là một quãng trạng thái liên tục.',
+   c:{list:()=>devOf().slice(0,12)}}]},
+ {row:'Sơ đồ rack & cảnh báo',panels:[
+  {w:10,t:'Sơ đồ rack trung tâm dữ liệu',s:'50 máy chủ · màu theo trạng thái',k:'plan',ds:'tsdb',q:Q.host,
+   d:'Vị trí máy chủ trong 4 cụm rack. Host mờ là host bị loại bởi bộ lọc $cluster / $role hiện tại.'},
+  {w:7,t:'Cảnh báo đang mở',s:'Grafana unified alerting',k:'alerts',ds:'prom',q:Q.rules,
+   d:'pending = đã chạm ngưỡng nhưng chưa đủ thời gian "for"; firing = đã đủ và đã gửi thông báo.'},
+  {w:7,t:'Log hệ thống',s:'live tail',k:'logs',ds:'logs',q:Q.logs,c:{max:'244px'},
+   d:'Log hợp nhất từ broker, ingest và node exporter; lọc theo mức ngay trên panel.'}]}],
+dev:[
+ {row:'Danh sách máy chủ',panels:[
+  {w:24,t:'Máy chủ',s:'bấm tiêu đề cột để sắp xếp · lọc theo trạng thái và hostname',k:'devtable',ds:'tsdb',q:Q.host,
+   d:'Bảng hợp nhất trạng thái mới nhất của 50 host: vai trò, rack, uplink, phiên bản agent, RTT nội bộ, đĩa trống và lần scrape cuối.'}]},
+ {row:'Phân bố & tài nguyên',panels:[
+  {w:8,t:'Đĩa trống thấp nhất',s:'% dung lượng /data',k:'bars',ds:'prom',q:Q.disk,
+   d:'10 host còn ít dung lượng nhất. Dưới 15% sẽ kích rule DiskSpaceLow.',
+   c:{unit:'%',rows:()=>devOf().filter(d=>d.st!=='off').sort((a,b)=>a.dfree-b.dfree).slice(0,10)
+     .map(d=>({nm:d.id,v:d.dfree,max:100,tok:d.dfree<15?'--crit':d.dfree<30?'--warn':d.dfree<55?'--serious':'--ok'}))}},
+  {w:8,t:'Phân bố RTT nội bộ',s:'host → broker · ms',k:'hist',ds:'prom',q:'histogram_quantile(0.95, rate(node_network_rtt_seconds_bucket[5m])) * 1000',
+   d:'RTT từ host tới broker. Trên 8 ms thường là nghẽn uplink hoặc switch ToR quá tải.',
+   c:{tok:'--s2',bins:()=>[[0,1],[1,2],[2,4],[4,8],[8,12],[12,16]]
+     .map(b=>({lbl:b[0]+'…'+b[1]+' ms',n:devOf().filter(d=>d.rtt>=b[0]&&d.rtt<b[1]).length,
+       tok:b[0]>=8?'--crit':b[0]>=4?'--warn':'--s2'}))}},
+  {w:8,t:'Cơ cấu theo vai trò',s:'host đang hiển thị',k:'donut',ds:'tsdb',q:Q.host,
+   d:'Tỉ lệ host theo vai trò sau khi áp bộ lọc.',
+   c:{items:()=>TYPES.map((t,i)=>({nm:t.nm,v:devOf().filter(d=>d.ty.id===t.id).length,tok:'--s'+(i+1)})),
+      center:()=>({v:String(devOf().length),lbl:'host'})}}]},
+ {row:'Agent & trạng thái',panels:[
+  {w:8,t:'Tiến độ rollout agent',s:'mục tiêu 3.1.2',k:'bars',ds:'prom',q:'count by (version) (iot_agent_build_info)',
+   d:'Số host theo phiên bản agent thu thập. Rollout 3.1.2 đang chạy lần lượt theo từng cụm.',
+   c:{unit:' host',rows:()=>AGV.map(v=>({nm:'agent '+v,v:devOf().filter(d=>d.agv===v).length,max:Math.max(1,devOf().length),
+     tok:v==='3.1.2'?'--ok':v==='3.0.4'?'--warn':'--crit'}))}},
+  {w:16,t:'State timeline 20 máy chủ',s:'up / warning / critical / down',k:'timeline',ds:'tsdb',q:Q.host,
+   d:'Dùng để phân biệt sự cố đồng thời nhiều host (mất rack, mất switch) với lỗi lẻ của một host.',
+   c:{list:()=>devOf().slice(0,20),h:'lg'}}]}],
+en:[
+ {row:'Tiêu thụ điện',panels:[
+  {w:16,t:'Công suất theo cụm rack',s:'kW · stacked',k:'ts',ds:'tsdb',q:Q.kw,
+   d:'Vùng xếp lớp: chiều cao tổng là công suất toàn phòng máy, tooltip có cả tổng.',
+   c:{series:zSeries('kw'),unit:' kW',stack:true,h:'lg',dec:0}},
+  {w:4,t:'Điện năng 24h',k:'stat',ds:'tsdb',q:Q.kw,
+   d:'Tích phân công suất PDU theo giờ trong 24 giờ qua.',
+   c:{nm:'kWh',calc:()=>({v:grp(ENH.reduce((s,v)=>s+v,0)),u:'kWh',
+     d:'trung bình '+grp(ENH.reduce((s,v)=>s+v,0)/24)+' kW/h',tok:'--s1',spark:ZONES[0].kwS})}},
+  {w:4,t:'Chi phí ước tính',k:'stat',ds:'tsdb',q:Q.kw,
+   d:'Đơn giá bình quân 2.600 ₫/kWh, chưa tính giá giờ cao điểm.',
+   c:{nm:'VND',calc:()=>{const kwh=ENH.reduce((s,v)=>s+v,0);
+     return{v:fx(kwh*2600/1e6,1),u:'triệu ₫',d:'đơn giá 2.600 ₫/kWh · 24h',tok:'--s5',spark:ZONES[1].kwS};}}}]},
+ {row:'Phân tích phụ tải',panels:[
+  {w:12,t:'Điện năng theo giờ',s:'kWh · 24 giờ qua',k:'vbars',ds:'tsdb',q:Q.kw,
+   d:'Cột cam/đỏ là các giờ vượt 400/470 kWh — thường trùng khung giờ tải đỉnh của ingest.',
+   c:{nm:'kWh',items:()=>ENH.map((v,i)=>({lbl:String(HRS[i]).padStart(2,'0')+'h',v,
+     tok:v>470?'--s6':v>400?'--s1':'--s2'}))}},
+  {w:6,t:'Tỉ trọng theo cụm',s:'công suất hiện tại',k:'donut',ds:'tsdb',q:Q.kw,
+   d:'Cụm ingest C1 thường chiếm trên 35% tổng tải điện.',
+   c:{items:()=>ZONES.map(z=>({nm:z.nm,v:z.kwS.last(),tok:z.tok})),center:()=>({v:grp(totKw()),lbl:'kW'})}},
+  {w:6,t:'Chất lượng điện & PUE',s:'hiện tại',k:'gauges',ds:'tsdb',q:'from(bucket:"iot") |> range(start:-5m) |> filter(fn:(r)=>r._field=="pf") |> last()',
+   d:'PF dưới 92% bị tính phí phản kháng. PUE là tổng điện phòng máy chia cho điện tải IT.',
+   c:{cols:3,items:[
+    {nm:'Hệ số công suất',get:()=>G.pf.last()*100,min:70,max:100,unit:'%',dec:1,th:[101,102]},
+    {nm:'PUE',get:()=>1.24+(1-G.pf.last())*2.2,min:1,max:2,unit:'ratio',dec:2,th:[1.5,1.7]},
+    {nm:'Tải / định mức',get:()=>totKw()/650*100,min:0,max:120,unit:'%',dec:0,th:[80,95]}]}}]},
+ {row:'Chi tiết',panels:[
+  {w:12,t:'Phụ tải theo cụm',k:'table',ds:'tsdb',q:Q.kw,
+   d:'kWh 24h được ước lượng từ công suất trung bình của cửa sổ hiện tại.',
+   c:{cols:['Cụm','kW hiện tại','kWh 24h','Tỉ trọng'],right:[1,2,3],
+      rows:()=>{const tot=totKw()||1;return ZONES.map(z=>[z.nm,fx(z.kwS.last(),1),grp(z.kwS.avg(N)*24),fx(z.kwS.last()/tot*100,1)+'%']);}}},
+  {w:12,t:'Hệ số công suất (PF)',s:'mục tiêu ≥ 0.92',k:'ts',ds:'tsdb',q:'from(bucket:"iot") |> range(start: v.timeRangeStart) |> filter(fn:(r)=>r._field=="pf") |> aggregateWindow(every: v.windowPeriod, fn: mean)',
+   d:'PF tổng tại tủ phân phối của phòng máy.',
+   c:{series:[{nm:'PF tổng',tok:'--s5',dash:[],d:()=>G.pf.d}],dec:3,h:'sm',thin:true}}]}],
+inf:[
+ {row:'Ingest & độ trễ',panels:[
+  {w:12,t:'Bản tin MQTT theo topic',s:'msg/s · stacked',k:'ts',ds:'prom',q:Q.msg,
+   d:'Tách theo nhóm topic để thấy đợt OTA hay lệnh điều khiển làm tăng tải ingest.',
+   c:{series:TOPICS.map(t=>({nm:t.nm,tok:t.tok,dash:t.dash,d:()=>t.s.d})),unit:' msg/s',stack:true,dec:0}},
+  {w:12,t:'Độ trễ ghi InfluxDB',s:'ms · p50 / p95 / p99',k:'ts',ds:'prom',q:Q.lat,
+   d:'Ba phân vị trên cùng một trục vì cùng đơn vị. Đường gạch là SLO 100 ms.',
+   c:{series:[{nm:'p50',tok:'--s3',dash:[],d:()=>G.lat50.d},{nm:'p95',tok:'--s1',dash:[7,4],d:()=>G.lat95.d},
+      {nm:'p99',tok:'--s6',dash:[2,4],d:()=>G.lat99.d}],unit:' ms',dec:0,zero:true,
+      thresholds:[{v:100,sev:'warn'}],ann:true}}]},
+ {row:'Phân bố & tài nguyên',panels:[
+  {w:12,t:'Phân bố độ trễ ghi',s:'số bản tin theo nhóm · 24 phút',k:'heat',ds:'prom',
+   q:'sum by (le) (rate(influx_write_duration_seconds_bucket[1m]))',
+   d:'Histogram theo thời gian: hàng dưới nặng màu là đuôi trễ đang dày lên.',
+   c:{rows:LATB,cols:()=>{const now=Date.now();return Array.from({length:24},(_,i)=>hh(now-(23-i)*60000));},
+      get:(r,c)=>LATH[c][r],hue:'--s1',unit:' msg',dec:0,pl:66}},
+  {w:6,t:'Kết nối broker',k:'stat',ds:'prom',q:'emqx_connections_count{node=~"emqx@10.8.2.*"}',
+   d:'Số client MQTT đang kết nối vào cụm C2. Dưới 45 sẽ ảnh hưởng SLO khả dụng.',
+   c:{nm:'conn',calc:()=>({v:String(Math.round(G.conns.last())),u:'client',
+     d:'EMQX 5.9 · QoS 1 · TLS 1.3 · '+grp(totMsg())+' msg/s',tok:'--s2',spark:G.conns})}},
+  {w:6,t:'Hàng đợi chờ ghi',k:'stat',ds:'prom',q:'emqx_queued_messages',
+   d:'Bản tin đã nhận nhưng chưa ghi xuống TSDB. Trên 600 kích rule BrokerQueueDepth.',
+   c:{nm:'queue',calc:()=>{const q=G.queue.last();
+     return{v:grp(q),u:'msg',d:'buffer 5s · '+(q>600?'<i class="down">nguy cơ nghẽn</i>':'ổn định'),
+     tok:q>600?'--crit':q>350?'--warn':'--s3',spark:G.queue};}}}]},
+ {row:'Kiến trúc & lưu trữ',panels:[
+  {w:24,t:'Kiến trúc hệ thống server IoT',s:'client → LB → broker → ingest → TSDB → Grafana · số liệu cập nhật trực tiếp',k:'flow',ds:'prom',q:Q.msg,
+   d:'Sơ đồ luồng dữ liệu kèm throughput, số kết nối và độ trễ thực tại từng chặng.'},
+  {w:12,t:'Log broker & pipeline',s:'live tail',k:'logs',ds:'logs',q:Q.logs,c:{max:'200px'},
+   d:'Gộp log EMQX, ingest worker và compaction của TSDB.'},
+  {w:12,t:'Lưu trữ & retention',k:'table',ds:'prom',q:'influx_disk_bytes / influx_disk_total_bytes * 100',
+   d:'Cấu hình lưu trữ hiện hành của cụm C3.',
+   c:{cols:['Thành phần','Giá trị'],right:[1],max:'200px',rows:()=>[
+    ['InfluxDB — dung lượng đã dùng',fx(G.disk.last(),1)+' %'],
+    ['Retention policy','90d (raw 7d + downsample 1m)'],
+    ['Series cardinality',grp(48200+Math.round(G.conns.last()*37))],
+    ['Điểm ghi mỗi phút',grp(totMsg()*60)],
+    ['CPU node ingest (C1)',fx(G.cpu.last(),1)+' %'],
+    ['Nén trung bình','4.6×'],
+    ['Backup gần nhất','hôm nay 03:15 · thành công']]}}]}],
+ops:[
+ {row:'SLO & ngân sách lỗi',panels:[
+  {w:12,t:'SLO nền tảng IoT',s:'cửa sổ 30 ngày',k:'slo',ds:'prom',q:Q.slo,
+   d:'Thanh màu là phần ngân sách lỗi còn lại. Burn > 1× nghĩa là đang tiêu ngân sách nhanh hơn cho phép.',
+   c:{items:SLOS}},
+  {w:6,t:'MTTR trung bình',k:'stat',ds:'prom',q:'avg(incident_resolution_minutes{env="prod"})',
+   d:'Thời gian trung bình từ lúc alert firing tới lúc resolved, tính trên các incident đã đóng.',
+   c:{nm:'MTTR',calc:()=>{const L=INCIDENTS.filter(i=>i.state==='resolved');
+     const v=L.reduce((s,i)=>s+i.mttr,0)/Math.max(1,L.length);
+     return{v:fx(v,0),u:'phút',d:L.length+' incident · mục tiêu &lt; 60 phút',tok:v<60?'--ok':'--warn',spark:G.lat95};}}},
+  {w:6,t:'Incident 14 ngày',k:'stat',ds:'prom',q:'count(increase(alerts_fired_total[14d]))',
+   d:'Số incident đã mở trong 14 ngày, chia theo mức.',
+   c:{nm:'incident',calc:()=>{const L=INCIDENTS,cr=L.filter(i=>i.sev==='crit').length;
+     return{v:String(L.length),d:'<i class="down">'+cr+' critical</i> · còn lại major/warning',tok:'--s4',spark:G.loss};}}}]},
+ {row:'Alert rule & incident',panels:[
+  {w:24,t:'Alert rules',s:'9 rule · Grafana unified alerting',k:'rules',ds:'prom',q:Q.rules,
+   d:'Toàn bộ rule đang hoạt động kèm biểu thức, thời gian "for", label định tuyến và runbook tương ứng.'},
+  {w:14,t:'Lịch sử incident',s:'14 ngày gần nhất',k:'incidents',ds:'prom',q:'ALERTS_FOR_STATE{job="iot-platform"}',
+   d:'Incident đóng trong phiên mô phỏng cũng được thêm vào bảng này.'},
+  {w:10,t:'Kíp trực',k:'table',ds:'prom',q:'oncall_schedule{team=~".+"}',
+   d:'Lịch trực và kênh liên hệ theo nhóm chịu trách nhiệm trong label của rule.',
+   c:{cols:['Vai trò','Team','Kênh','Hotline','Trạng thái'],wide:true,max:'268px',
+      rows:()=>ONCALL.map(r=>[r[0],'<span class="lab">'+r[1]+'</span>',r[2],r[3],
+        '<span class="pill '+(r[4]==='đang trực'?'ok':'flat')+'">'+r[4]+'</span>'])}}]},
+ {row:'Bảo trì & thay đổi',panels:[
+  {w:14,t:'Cửa sổ bảo trì',s:'đã lên lịch / chờ duyệt',k:'table',ds:'prom',q:'maintenance_windows{env="prod"}',
+   d:'Trong các cửa sổ này, alert của cụm liên quan sẽ được silence.',
+   c:{cols:['Cửa sổ','Phạm vi','Trạng thái','Team'],wide:true,max:'220px',
+      rows:()=>MAINT.map(r=>[r[0],r[1],'<span class="pill '+(r[2]==='đã lên lịch'?'ok':'warn')+'">'+r[2]+'</span>','<span class="lab">'+r[3]+'</span>'])}},
+  {w:10,t:'Tài nguyên node ingest',s:'CPU · disk',k:'ts',ds:'prom',q:Q.cpu,
+   d:'CPU và dung lượng đĩa của máy chủ chạy ingest worker + InfluxDB.',
+   c:{series:[{nm:'CPU %',tok:'--s2',dash:[],d:()=>G.cpu.d},{nm:'Disk %',tok:'--s5',dash:[7,4],d:()=>G.disk.d}],
+      unit:' %',dec:1,zero:true,h:'sm',thresholds:[{v:85,sev:'warn'}]}}]}]
+};
+
+/* ===================== 12. DỰNG DASHBOARD ===================== */
+const PANELS=[],ROWOPEN={};let activeTab='ov',EXP=null;
+const KINDS={ts:mkTS,stat:mkStat,gauges:mkGauges,bars:mkBars,heat:mkHeat,timeline:mkTimeline,hist:mkHist,
+  vbars:mkVBars,donut:mkDonut,devtable:mkDevTable,logs:mkLogs,alerts:mkAlerts,plan:mkPlan,flow:mkFlow,
+  table:mkTable,slo:mkSLO,rules:mkRules,incidents:mkIncidents};
+const JTYPE={ts:'timeseries',stat:'stat',gauges:'gauge',bars:'bargauge',heat:'heatmap',timeline:'state-timeline',
+  hist:'barchart',vbars:'barchart',donut:'piechart',devtable:'table',logs:'logs',alerts:'alertlist',
+  plan:'geomap',flow:'canvas',table:'table',slo:'bargauge',rules:'alertlist',incidents:'table'};
+const RO=new ResizeObserver(es=>es.forEach(e=>{const p=PANELS.find(x=>x.body===e.target);if(p&&vis(p))safeRender(p);}));
+function vis(p){return EXP?EXP===p:(p.tab===activeTab&&ROWOPEN[p.rowKey]!==false);}
+function safeRender(p){try{p.inst.render();}catch(err){console.error('panel "'+p.title+'":',err);}}
+function renderVisible(){readTheme();PANELS.forEach(p=>{if(vis(p))safeRender(p);});updFoot();}
+function renderCross(){PANELS.forEach(p=>{if(p.isTS&&vis(p))safeRender(p);});}
+function build(){
+  const dash=document.getElementById('dash');let pid=0;
+  TABS.forEach(tb=>{
+    const sec=document.createElement('section');sec.dataset.tab=tb.id;sec.hidden=tb.id!==activeTab;
+    (SPEC[tb.id]||[]).forEach((row,ri)=>{
+      const key=tb.id+':'+ri;
+      const hdr=document.createElement('button');hdr.className='rowhdr';hdr.setAttribute('aria-expanded','true');
+      hdr.innerHTML='<span class="ar">▾</span><span>'+row.row+'</span><span class="meta">'+row.panels.length+' panel</span>';
+      const g=document.createElement('div');g.className='grid';
+      hdr.addEventListener('click',()=>{const open=hdr.getAttribute('aria-expanded')==='true';
+        hdr.setAttribute('aria-expanded',String(!open));ROWOPEN[key]=!open;g.hidden=open;renderVisible();});
+      row.panels.forEach(p=>{
+        const el=document.createElement('section');el.className='panel';el.dataset.w=p.w;el.style.setProperty('--w',p.w);
+        el.innerHTML='<header><h2>'+p.t+'</h2>'+(p.d?'<span class="info" title="'+p.d.replace(/"/g,'&quot;')+'">i</span>':'')+
+          (p.s?'<span class="sub">'+p.s+'</span>':'')+
+          '<details class="dd pmenu"><summary aria-label="Menu panel">⋮</summary><div class="menu">'+
+          '<button data-a="view">⛶ Xem toàn màn hình<span class="kbd">v</span></button>'+
+          '<button data-a="insp">▦ Inspect — data · query · JSON</button>'+
+          '<button data-a="csv">⧉ Copy CSV</button></div></details></header><div class="body"></div>';
+        const body=el.querySelector('.body');
+        const inst=(KINDS[p.k]||mkTable)(body,p.c||{});
+        const rec={el,body,inst,tab:tb.id,rowKey:key,title:p.t,spec:p,id:++pid,isTS:p.k==='ts'};
+        PANELS.push(rec);RO.observe(body);
+        el.querySelector('.pmenu .menu').addEventListener('click',e=>{
+          const b=e.target.closest('button');if(!b)return;
+          el.querySelector('.pmenu').open=false;
+          if(b.dataset.a==='view')toggleExpand(rec);
+          else if(b.dataset.a==='insp')openInspect(rec);
+          else copyCSV(rec,b);});
+        g.append(el);});
+      sec.append(hdr,g);});
+    dash.append(sec);});
+  const tabs=document.getElementById('tabs');
+  tabs.innerHTML=TABS.map(t=>'<button class="tab'+(t.id===activeTab?' on':'')+'" data-t="'+t.id+'">'+t.nm+
+    ' <span class="cnt">'+(SPEC[t.id]||[]).reduce((s,r)=>s+r.panels.length,0)+'</span>'+
+    (t.id==='ops'?'<span class="dotal" id="opsDot" hidden></span>':'')+'</button>').join('');
+  tabs.addEventListener('click',e=>{const b=e.target.closest('.tab');if(!b)return;setTab(b.dataset.t);});
+}
+function setTab(id){activeTab=id;closeExpand();
+  document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.toggle('on',x.dataset.t===id));
+  document.querySelectorAll('#dash section[data-tab]').forEach(s=>s.hidden=s.dataset.tab!==id);
+  renderVisible();}
+function buildVars(){
+  const v=document.getElementById('vars');
+  v.innerHTML='<div class="var"><span class="k">Hạ tầng</span><div class="box">iot-prod · DC1 + DC2</div></div>'+
+    '<div class="var"><span class="k">$cluster</span><div class="box" id="zchips">'+
+      ZONES.map(z=>'<button class="chip on" data-z="'+z.id+'">'+z.id+'</button>').join('')+'</div></div>'+
+    '<div class="var"><span class="k">$role</span><details class="dd"><summary class="box">'+
+      '<span id="tlbl">Tất cả (6)</span> ▾</summary><div class="menu" id="tmenu" style="left:0;right:auto">'+
+      '<div class="lbl">Chọn vai trò máy chủ</div>'+TYPES.map(t=>'<button class="sel" data-t="'+t.id+'">✓ '+t.nm+'</button>').join('')+
+      '<div class="sep"></div><button data-t="__all">Chọn tất cả</button></div></details></div>'+
+    '<div class="var"><span class="k">$interval</span><div class="box">5s</div></div>'+
+    '<div class="var"><span class="k">K8s</span><div class="box">iot-prod-01</div></div>'+
+    '<div class="var"><span class="k">Timezone</span><div class="box">Asia/Ho_Chi_Minh</div></div>';
+  document.getElementById('zchips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;
+    const z=b.dataset.z;ZSEL.has(z)?ZSEL.delete(z):ZSEL.add(z);b.classList.toggle('on',ZSEL.has(z));renderVisible();});
+  const tm=document.getElementById('tmenu');
+  tm.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.t==='__all')TYPES.forEach(x=>TSEL.add(x.id));
+    else{TSEL.has(b.dataset.t)?TSEL.delete(b.dataset.t):TSEL.add(b.dataset.t);}
+    tm.querySelectorAll('button[data-t]').forEach(x=>{if(x.dataset.t==='__all')return;
+      const on=TSEL.has(x.dataset.t);x.classList.toggle('sel',on);
+      x.textContent=(on?'✓ ':'   ')+TYPES.find(y=>y.id===x.dataset.t).nm;});
+    document.getElementById('tlbl').textContent=TSEL.size===TYPES.length?'Tất cả (6)':TSEL.size+' vai trò';
+    renderVisible();});
+}
+/* ---- expand / inspect / modal ---- */
+const backdrop=document.getElementById('backdrop');
+let modal=null;
+function toggleExpand(rec){(EXP===rec)?closeExpand():openExpand(rec);}
+function openExpand(rec){closeExpand();EXP=rec;rec.el.classList.add('expanded');backdrop.classList.add('on');renderVisible();}
+function closeExpand(){if(EXP){EXP.el.classList.remove('expanded');EXP=null;}if(!modal)backdrop.classList.remove('on');renderVisible();}
+backdrop.addEventListener('click',()=>{if(modal)closeModal();else closeExpand();});
+function closeModal(){if(modal){modal.remove();modal=null;if(!EXP)backdrop.classList.remove('on');}}
+function tableHTML(d){
+  if(!d.rows.length)return '<div class="empty">Panel này không xuất bảng dữ liệu</div>';
+  return '<table class="t"><thead><tr>'+d.cols.map((c,i)=>'<th'+(i?' class="r"':'')+'>'+esc(c)+'</th>').join('')+
+    '</tr></thead><tbody>'+d.rows.map(r=>'<tr>'+r.map((x,i)=>'<td'+(i?' class="r num"':'')+'>'+esc(x)+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+}
+function panelJSON(rec){const p=rec.spec;
+  return JSON.stringify({id:rec.id,type:JTYPE[p.k]||'table',title:p.t,description:p.d||'',
+    gridPos:{w:p.w,h:p.k==='stat'?4:8},
+    datasource:{type:(p.ds==='logs'?'loki':p.ds==='prom'?'prometheus':'influxdb'),uid:p.ds||'tsdb'},
+    targets:[{refId:'A',query:p.q||'',interval:'5s'}],
+    fieldConfig:{defaults:{unit:(p.c&&p.c.unit||'').trim()||'short',decimals:p.c&&p.c.dec,
+      thresholds:{mode:'absolute',steps:[{color:'green',value:null}].concat(((p.c&&p.c.thresholds)||[]).map(t=>({color:t.sev==='crit'?'red':'yellow',value:t.v})))}},overrides:[]},
+    options:{legend:{displayMode:'list',placement:'bottom'},tooltip:{mode:'multi'}}},null,2);
+}
+function dashJSON(){
+  const panels=[];let id=0;
+  TABS.forEach(tb=>(SPEC[tb.id]||[]).forEach(row=>{
+    panels.push({id:++id,type:'row',title:row.row,collapsed:false,repeat:null});
+    row.panels.forEach(p=>panels.push({id:++id,type:JTYPE[p.k]||'table',title:p.t,gridPos:{w:p.w,h:p.k==='stat'?4:8},
+      datasource:{uid:p.ds||'tsdb'},targets:[{refId:'A',query:p.q||''}]}));}));
+  return JSON.stringify({uid:UID,title:'IoT Platform Operations — Hệ thống server IoT',version:VER,schemaVersion:39,
+    tags:['iot-platform','server','mqtt','influxdb','prod'],timezone:'Asia/Ho_Chi_Minh',editable:true,
+    time:{from:'now-'+RANGES[rangeIx].lbl.replace('Last ','').replace(/\s/g,''),to:'now'},
+    refresh:REFS[refIx].lbl,
+    templating:{list:[
+      {name:'cluster',type:'custom',multi:true,current:{text:[...ZSEL].join(' + '),value:[...ZSEL]},options:ZONES.map(z=>({text:z.id,value:z.id}))},
+      {name:'role',type:'custom',multi:true,current:{value:[...TSEL]}},
+      {name:'interval',type:'interval',current:{value:'5s'}}]},
+    annotations:{list:[{name:'Alerts',datasource:{uid:'prom'},enable:true,iconColor:'red'}]},
+    panels},null,2);
+}
+function openInspect(rec){
+  closeModal();
+  const d=rec.inst.data?rec.inst.data():{cols:[],rows:[]},p=rec.spec;
+  const raw=p.q||'(panel này không truy vấn dữ liệu)';
+  const interp=raw.replace(/\$\{cluster:json\}/g,zoneSet()).replace(/\$\{cluster:regex\}/g,[...ZSEL].join('|'))
+    .replace(/\$\{level\}/g,logFilter==='ALL'?'.+':logFilter).replace(/v\.windowPeriod/g,'5s')
+    .replace(/v\.timeRangeStart/g,'-'+RANGES[rangeIx].lbl.replace('Last ','')).replace(/v\.timeRangeStop/g,'now()');
+  modal=document.createElement('div');modal.className='modal';
+  modal.innerHTML='<header><h3>Inspect — '+esc(rec.title)+'</h3><button class="ctl" data-c="csv">⧉ CSV</button>'+
+    '<button class="ctl" data-x="1">Đóng</button></header>'+
+    '<div class="mtabs"><button class="mtab on" data-m="data">Data ('+d.rows.length+' dòng)</button>'+
+    '<button class="mtab" data-m="query">Query</button><button class="mtab" data-m="json">Panel JSON</button></div>'+
+    '<div class="mbody" id="mb"></div>';
+  const mb=modal.querySelector('#mb');
+  const views={
+    data:()=>tableHTML(d),
+    query:()=>'<div class="qblock"><div class="qh">Data source</div><pre>'+esc(DS[p.ds]||DS.tsdb)+'</pre></div>'+
+      '<div class="qblock"><div class="qh">Query (nguyên bản, còn biến)</div><pre>'+esc(raw)+'</pre></div>'+
+      '<div class="qblock"><div class="qh">Query (đã nội suy biến dashboard)</div><pre>'+esc(interp)+'</pre></div>'+
+      '<div class="qblock"><div class="qh">Panel</div><dl class="kv">'+
+      '<dt>Loại</dt><dd>'+(JTYPE[p.k]||'table')+'</dd><dt>Bề rộng</dt><dd>'+p.w+'/24</dd>'+
+      '<dt>Khoảng</dt><dd>'+RANGES[rangeIx].lbl+'</dd><dt>Refresh</dt><dd>'+REFS[refIx].lbl+'</dd>'+
+      '<dt>$cluster</dt><dd>'+[...ZSEL].join(', ')+'</dd><dt>$role</dt><dd>'+TSEL.size+'/'+TYPES.length+'</dd></dl></div>'+
+      (p.d?'<div class="qblock"><div class="qh">Mô tả</div><pre>'+esc(p.d)+'</pre></div>':''),
+    json:()=>'<div class="qblock"><pre>'+esc(panelJSON(rec))+'</pre></div>'
+  };
+  mb.innerHTML=views.data();
+  modal.querySelector('.mtabs').addEventListener('click',e=>{const b=e.target.closest('.mtab');if(!b)return;
+    modal.querySelectorAll('.mtab').forEach(x=>x.classList.toggle('on',x===b));mb.innerHTML=views[b.dataset.m]();});
+  modal.querySelector('[data-x]').addEventListener('click',closeModal);
+  modal.querySelector('[data-c]').addEventListener('click',ev=>copyCSV(rec,ev.target));
+  document.body.append(modal);backdrop.classList.add('on');
+}
+function csvOf(rec){const d=rec.inst.data?rec.inst.data():{cols:[],rows:[]};
+  return [d.cols.join(','),...d.rows.map(r=>r.map(x=>/[",]/.test(String(x))?'"'+String(x).replace(/"/g,'""')+'"':x).join(','))].join('\n');}
+function copyCSV(rec,btn){const txt=csvOf(rec),old=btn.textContent;
+  const done=ok=>{btn.textContent=ok?'✓ Đã copy':'✕ Không copy được';setTimeout(()=>btn.textContent=old,1600);};
+  try{navigator.clipboard.writeText(txt).then(()=>done(true)).catch(()=>done(false));}catch(e){done(false);}}
+function openModalHTML(title,html){
+  closeModal();modal=document.createElement('div');modal.className='modal';
+  modal.innerHTML='<header><h3>'+title+'</h3><button class="ctl" data-x="1">Đóng</button></header><div class="mbody">'+html+'</div>';
+  modal.querySelector('[data-x]').addEventListener('click',closeModal);
+  document.body.append(modal);backdrop.classList.add('on');}
+/* ---- nav ---- */
+let timer=null;
+function setRefresh(){if(timer){clearInterval(timer);timer=null;}
+  const ms=REFS[refIx].ms;document.getElementById('refLbl').textContent=REFS[refIx].lbl;
+  const dot=document.getElementById('liveDot');dot.style.background=ms?col('--ok'):col('--off');
+  dot.style.animationPlayState=ms?'running':'paused';
+  if(ms)timer=setInterval(tick,ms);}
+function setRange(i){rangeIx=Math.max(0,Math.min(RANGES.length-1,i));
+  document.getElementById('rangeLbl').textContent=RANGES[rangeIx].lbl;
+  document.querySelectorAll('#menuRange button').forEach(b=>b.classList.toggle('sel',+b.dataset.i===rangeIx));
+  renderVisible();}
+function buildMenus(){
+  const mr=document.getElementById('menuRange');
+  mr.innerHTML='<div class="lbl">Khoảng thời gian</div>'+RANGES.map((r,i)=>'<button data-i="'+i+'"'+(i===rangeIx?' class="sel"':'')+'>'+r.lbl+'</button>').join('');
+  mr.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    setRange(+b.dataset.i);document.getElementById('ddRange').open=false;});
+  const mf=document.getElementById('menuRef');
+  mf.innerHTML='<div class="lbl">Tự động làm mới</div>'+REFS.map((r,i)=>'<button data-i="'+i+'"'+(i===refIx?' class="sel"':'')+'>'+r.lbl+'</button>').join('');
+  mf.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;refIx=+b.dataset.i;
+    mf.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x===b));
+    document.getElementById('ddRef').open=false;setRefresh();});
+}
+let themeMode='sys';
+function applyTheme(){
+  const r=document.documentElement;
+  if(themeMode==='sys')r.removeAttribute('data-theme');else r.setAttribute('data-theme',themeMode);
+  document.getElementById('themeLbl').textContent=themeMode==='sys'?'Hệ thống':themeMode==='dark'?'Tối':'Sáng';
+  try{localStorage.setItem('iotTheme',themeMode);}catch(e){}
+  readTheme();setRefresh();renderVisible();}
+document.getElementById('btnTheme').addEventListener('click',()=>{
+  themeMode=themeMode==='sys'?'dark':themeMode==='dark'?'light':'sys';applyTheme();});
+document.getElementById('btnKiosk').addEventListener('click',()=>{document.body.classList.toggle('kiosk');renderVisible();});
+document.getElementById('btnZoom').addEventListener('click',()=>setRange(rangeIx+1));
+document.getElementById('btnJson').addEventListener('click',()=>openModalHTML('Dashboard JSON model — '+UID,
+  '<div class="qblock"><div class="qh">'+PANELS.length+' panel · '+TABS.length+' tab · schemaVersion 39</div><pre>'+esc(dashJSON())+'</pre></div>'));
+document.getElementById('btnHelp').addEventListener('click',showHelp);
+function showHelp(){openModalHTML('Phím tắt & cách dùng',
+  '<div class="qblock"><div class="qh">Phím tắt</div><div class="keys">'+
+  [['1 … 5','Chuyển tab dashboard'],['k','Bật/tắt kiosk mode'],['z','Zoom out khoảng thời gian'],
+   ['r','Làm mới ngay một nhịp'],['t','Đổi sáng/tối'],['?','Mở bảng này'],['Esc','Đóng panel/modal/kiosk']]
+  .map(r=>'<kbd>'+r[0]+'</kbd><span>'+r[1]+'</span>').join('')+'</div></div>'+
+  '<div class="qblock"><div class="qh">Tương tác</div><pre>• Hover biểu đồ: crosshair đồng bộ trên mọi time series đang hiện\n'+
+  '• Bấm legend: ẩn/hiện series\n• ⋮ trên panel: xem toàn màn hình, Inspect (data/query/JSON), copy CSV\n'+
+  '• Bấm tiêu đề row: gập/mở cả hàng panel\n• $cluster và $role lọc xuyên tất cả panel\n'+
+  '• Bấm tiêu đề cột trong bảng máy chủ để sắp xếp</pre></div>'+
+  '<div class="qblock"><div class="qh">Lưu ý</div><pre>Toàn bộ số liệu do trình duyệt sinh ra (seeded random walk + 9 alert rule).\n'+
+  'Không có kết nối tới InfluxDB, EMQX hay máy chủ thật; các câu query trong Inspect là query mẫu đúng cú pháp.</pre></div>');}
+document.addEventListener('keydown',e=>{
+  const t=e.target.tagName;if(t==='INPUT'||t==='TEXTAREA')return;
+  if(e.key==='Escape'){if(modal)closeModal();else if(EXP)closeExpand();else document.body.classList.remove('kiosk');return;}
+  if(e.key>='1'&&e.key<='5'){const tb=TABS[+e.key-1];if(tb)setTab(tb.id);return;}
+  if(e.key==='k'){document.body.classList.toggle('kiosk');renderVisible();}
+  else if(e.key==='z')setRange(rangeIx+1);
+  else if(e.key==='r')tick();
+  else if(e.key==='t'){themeMode=themeMode==='dark'?'light':'dark';applyTheme();}
+  else if(e.key==='?')showHelp();
+});
+function updFoot(){
+  const now=times[times.length-1],cr=[...ALERTS.values()].filter(a=>a.sev==='crit').length;
+  const dot=document.getElementById('opsDot');if(dot)dot.hidden=!cr;
+  document.getElementById('foot').innerHTML=
+    '<span>uid <b>'+UID+'</b> · version <b>'+VER+'</b> · '+PANELS.length+' panel</span>'+
+    '<span>data sources: <b>'+DS.tsdb+'</b>, '+DS.prom+', '+DS.logs+'</span>'+
+    '<span>cập nhật lúc <b>'+hhs(now)+'</b> · Asia/Ho_Chi_Minh</span>'+
+    '<span>Số liệu mô phỏng trong trình duyệt, không kết nối hệ thống thật.</span>';
+}
+
+/* ===================== 13. VÒNG LẶP ===================== */
+let k=N;
+function tick(){
+  k++;subTick++;
+  SENS.forEach(s=>s.step(k));
+  times.push(times[times.length-1]+STEP);if(times.length>N)times.shift();
+  const now=times[times.length-1];
+  DEV.forEach(d=>{
+    if(d.st!=='off'){
+      if(rnd()<.07&&d.dfree>1)d.dfree--;
+      d.seen=(d.seen+5)%12;
+      const r=rnd();let s=d.st;
+      if(s==='ok'&&r<.004)s='warn';else if(s==='warn'&&r<.08)s=(rnd()<.2?'crit':'ok');
+      else if(s==='crit'&&r<.12)s='warn';
+      if(d.dfree<12&&s==='ok')s='warn';
+      d.st=s;
+    }else{d.seen+=5;
+      if(rnd()<.004){d.st='ok';d.seen=0;log('INFO','[RECOVERED] '+d.id+' scrape trở lại · rtt='+fx(d.rtt,2)+'ms',now);}}
+    d.states.push(d.st);if(d.states.length>361)d.states.shift();
+    d.hist.push(devVal(d));if(d.hist.length>40)d.hist.shift();});
+  ZONES.forEach((z,i)=>{HEAT[i][23]=HEAT[i][23]*.82+z.reqS.last()*.18;});
+  ENH[23]=ENH[23]*.9+totKw()*.1;
+  if(subTick%12===0){const l=G.lat95.last(),tot=110+Math.round(rnd()*70);
+    const shape=l>80?[.18,.22,.24,.2,.12,.04]:l>45?[.3,.3,.2,.13,.05,.02]:[.44,.3,.15,.07,.03,.01];
+    LATH.shift();LATH.push(shape.map(p=>Math.round(tot*p*(.75+rnd()*.5))));}
+  ANN=ANN.filter(a=>a.t>times[0]);
+  evalAlerts(now);
+  randomLog(now);if(rnd()<.55)randomLog(now);
+  renderVisible();
+}
+
+/* ===================== 14. KHỞI ĐỘNG ===================== */
+try{const t=localStorage.getItem('iotTheme');if(t==='dark'||t==='light'||t==='sys')themeMode=t;}catch(e){}
+readTheme();buildVars();buildMenus();build();
+document.getElementById('rangeLbl').textContent=RANGES[rangeIx].lbl;
+applyTheme();
+window.addEventListener('resize',()=>renderVisible());
+if(window.matchMedia)try{window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{readTheme();renderVisible();});}catch(e){}
+</script>
+
+</html>
