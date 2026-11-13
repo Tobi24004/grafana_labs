@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Network Operations Center">
+  <rect width="128" height="128" rx="26" fill="#181b1f"/>
+  <rect x="6" y="6" width="116" height="116" rx="21" fill="none" stroke="#2c3235" stroke-width="2"/>
+  <!-- trục -->
+  <path d="M26 96 H104" stroke="#2c3235" stroke-width="2" stroke-linecap="round"/>
+  <path d="M26 96 V32" stroke="#2c3235" stroke-width="2" stroke-linecap="round"/>
+  <!-- đường lưu lượng -->
+  <path d="M28 84 L44 66 L58 74 L72 46 L88 56 L102 38" fill="none" stroke="#ff780a" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28 92 L44 86 L58 88 L72 78 L88 82 L102 70" fill="none" stroke="#5794f2" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5"/>
+  <!-- nút mạng -->
+  <circle cx="72" cy="46" r="6.5" fill="#ff780a"/>
+  <circle cx="102" cy="38" r="5" fill="#73bf69"/>
+  <circle cx="44" cy="66" r="5" fill="#73bf69"/>
+</svg>

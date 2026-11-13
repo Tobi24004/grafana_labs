@@ -15,7 +15,8 @@ cho một trung tâm điều hành mạng: 5 dashboard, 44 panel, 50 thiết b�
 ```bash
 git clone git@github.com:Tobi24004/grafana_labs.git
 cd grafana_labs
-./serve.sh            # → http://localhost:8787/
+./run.sh              # app desktop — cửa sổ riêng, không thanh địa chỉ
+./serve.sh            # hoặc web server cục bộ → http://localhost:8787/
 ```
 
 Hoặc mở thẳng `index.html` bằng trình duyệt (`file://` cũng chạy), hoặc bật **GitHub Pages**
@@ -23,6 +24,29 @@ Hoặc mở thẳng `index.html` bằng trình duyệt (`file://` cũng chạy),
 vì toàn bộ ứng dụng nằm trong một file tĩnh.
 
 Yêu cầu: một trình duyệt hiện đại. Không cần Node, không cần cài gói.
+
+### Chạy như app desktop
+
+`./run.sh` mở dashboard trong **cửa sổ native GTK + WebKit2** — không tab, không thanh địa chỉ,
+không cần web server, không tải thêm gì (dùng thư viện sẵn có của hệ thống, không phải Electron).
+
+Thiếu WebKit2 thì script tự lùi sang chế độ `--app` của Chrome/Chromium, cuối cùng mới tới
+trình duyệt mặc định. Trên Debian/Ubuntu, cài phần native bằng:
+
+```bash
+sudo apt install python3-gi gir1.2-webkit2-4.1
+```
+
+Thêm vào menu ứng dụng để bấm mở như mọi app khác (có icon riêng):
+
+```bash
+./desktop/install.sh            # cài
+./desktop/install.sh --remove   # gỡ
+```
+
+Phím tắt của cửa sổ app: `F11` toàn màn hình · `Ctrl` `+` / `-` / `0` phóng to, thu nhỏ, về 100%
+· `Ctrl+R` hoặc `F5` nạp lại · `Ctrl+Q` thoát. Phím tắt của dashboard (`1`–`5`, `k`, `z`, `t`, `?`…)
+vẫn hoạt động y như trên web.
 **Không cần mạng** — chỉ có dòng `<link>` nạp font Google; mất mạng thì trang tự dùng font hệ thống,
 mọi thứ khác chạy nguyên vẹn vì không có một lời gọi `fetch`/`WebSocket` nào.
 
@@ -144,8 +168,13 @@ sed -i 's/@example\.com/@congty.vn/g'         index.html
 
 ```
 grafana_labs/
-├── index.html    # toàn bộ dashboard (HTML + CSS + JS nội tuyến)
-├── serve.sh      # chạy web server cục bộ: ./serve.sh [port]
+├── index.html          # toàn bộ dashboard (HTML + CSS + JS nội tuyến)
+├── run.sh              # mở như app desktop (native → Chrome --app → trình duyệt)
+├── serve.sh            # chạy web server cục bộ: ./serve.sh [port]
+├── desktop/
+│   ├── app.py          # cửa sổ native GTK + WebKit2 (--selftest để tự kiểm tra)
+│   ├── icon.svg        # icon của app
+│   └── install.sh      # thêm/gỡ app trong menu ứng dụng
 └── README.md
 ```
 
